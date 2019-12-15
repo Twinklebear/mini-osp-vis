@@ -234,6 +234,8 @@ cpp::Geometry extract_isosurfaces(const json &config, const VolumeBrick &brick, 
         isosurface.setParam("vertex.position", cpp::Data(vertices));
         isosurface.setParam("index", cpp::Data(indices));
         isosurface.commit();
+    } else {
+        std::cout << "Isosurface at " << isovalue << " is empty\n";
     }
 #else
     // TODO: Use ospray's implicit isosurfaces

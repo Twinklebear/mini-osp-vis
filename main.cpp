@@ -249,7 +249,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
         auto geom = extract_isosurfaces(config, brick, isovalue);
         if (geom) {
             cpp::Material material(renderer_type, "default");
-            material.setParam("Kd", math::vec3f(1.f));
+            material.setParam("Kd", math::vec3f(0.2f, 0.5f, 0.8f));
             material.commit();
 
             cpp::GeometricModel geom_model;
@@ -421,6 +421,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
                              cpp::Data(tfn_opacities.size(), tfn_opacities.data(), true));
                 tfn.setParam("valueRange", value_range);
                 tfn.commit();
+                brick.brick.commit();
                 model.commit();
                 fb.clear();
             }
