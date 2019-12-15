@@ -213,12 +213,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     tfn.setParam("valueRange", value_range);
     tfn.commit();
 
-    // create and setup an ambient light
-    cpp::Light ambient_light("ambient");
-    ambient_light.commit();
-
-    cpp::Renderer renderer("scivis");
-    renderer.setParam("light", cpp::Data(ambient_light));
+    cpp::Renderer renderer("pathtracer");
     renderer.commit();
 
     cpp::VolumetricModel model(brick.brick);
@@ -248,8 +243,13 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     cpp::Instance instance(group);
     instance.commit();
 
+    // create and setup an ambient light
+    cpp::Light ambient_light("ambient");
+    ambient_light.commit();
+
     cpp::World world;
     world.setParam("instance", cpp::Data(instance));
+    world.setParam("light", cpp::Data(ambient_light));
     world.commit();
 
     glm::vec3 cam_eye = arcball.eye();
@@ -378,24 +378,36 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
         ImGui_ImplSDL2_NewFrame(window);
         ImGui::NewFrame();
 
-        tfn_widget.draw_ui();
-        if (tfn_widget.changed()) {
-            tfn_widget.get_colormapf(tfn_colors, tfn_opacities);
-            tfn.setParam("color",
-                         cpp::Data(tfn_colors.size() / 3,
-                                   reinterpret_cast<math::vec3f *>(tfn_colors.data()),
-                                   true));
-            tfn.setParam("opacity",
-                         cpp::Data(tfn_opacities.size(), tfn_opacities.data(), true));
-            tfn.setParam("valueRange", value_range);
-            tfn.commit();
-            model.commit();
-            fb.clear();
+        if (ImGui::Begin("Params")) {
+            static float density_scale = 1.f;
+            if (ImGui::SliderFloat("Density Scale", &density_scale, 0.5f, 10.f)) {
+                model.setParam("densityScale", density_scale);
+                model.commit();
+                fb.clear();
+            }
+            ImGui::End();
+        }
+
+
+        if (ImGui::Begin("Transfer Function")) {
+            tfn_widget.draw_ui();
+            if (tfn_widget.changed()) {
+                tfn_widget.get_colormapf(tfn_colors, tfn_opacities);
+                tfn.setParam("color",
+                        cpp::Data(tfn_colors.size() / 3,
+                            reinterpret_cast<math::vec3f *>(tfn_colors.data()),
+                            true));
+                tfn.setParam("opacity",
+                        cpp::Data(tfn_opacities.size(), tfn_opacities.data(), true));
+                tfn.setParam("valueRange", value_range);
+                tfn.commit();
+                model.commit();
+                fb.clear();
+            }
+            ImGui::End();
         }
 
         fb.renderFrame(renderer, camera, world);
-
-        ImGui::End();
 
         // Rendering
         ImGui::Render();
