@@ -14,6 +14,7 @@ find_package(ospray 2.0 REQUIRED)
 find_package(TBB REQUIRED)
 find_package(glm REQUIRED)
 find_package(VTK)
+find_package(OpenVisus)
 
 add_subdirectory(imgui)
 add_subdirectory(util)
@@ -47,7 +48,8 @@ target_compile_definitions(mini_scivis PUBLIC
 
 
 if (${VTK_FOUND})
-    target_compile_definitions(mini_scivis PUBLIC -DVTK_FOUND=1)
+    target_compile_definitions(mini_scivis PUBLIC
+        -DVTK_FOUND=1)
     target_include_directories(mini_scivis PUBLIC
         ${VTK_INCLUDE_DIRS})
 
@@ -56,5 +58,14 @@ if (${VTK_FOUND})
 else()
     message(WARNING "VTK not found, but is required for testing explicit isosurfaces. "
         "Implicit isosurfaces will be used instead.")
+endif()
+
+if (${OpenVisus_FOUND})
+    target_compile_definitions(mini_scivis PUBLIC
+        -DOPENVISUS_FOUND=1)
+    target_link_libraries(mini_scivis PUBLIC
+        OpenVisus::Idx)
+else()
+    message(WARNING "OpenVisus not found, IDX support will be disabled")
 endif()
 

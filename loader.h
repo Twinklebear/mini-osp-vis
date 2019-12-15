@@ -21,7 +21,9 @@ struct VolumeBrick {
     std::shared_ptr<std::vector<uint8_t>> voxel_data;
 };
 
-VolumeBrick load_volume_brick(const json &config);
+VolumeBrick load_raw_volume(const json &config);
+
+VolumeBrick load_idx_volume(const std::string &idx_file, json &config);
 
 cpp::Geometry extract_isosurfaces(const json &config,
                                   const VolumeBrick &brick,

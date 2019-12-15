@@ -21,9 +21,13 @@
 #include <vtkUnsignedShortArray.h>
 #endif
 
-VolumeBrick load_volume_brick(const json &config)
+#ifdef OPENVISUS_FOUND
+#include <Visus/ApplicationInfo.h>
+#include <Visus/IdxDataset.h>
+#endif
+
+VolumeBrick load_raw_volume(const json &config)
 {
-    using namespace std::chrono;
     VolumeBrick brick;
 
     const std::string volume_file = config["volume"].get<std::string>();
@@ -78,6 +82,86 @@ VolumeBrick load_volume_brick(const json &config)
     brick.brick.setParam("voxelData", osp_data);
     brick.brick.commit();
     return brick;
+}
+
+VolumeBrick load_idx_volume(const std::string &idx_file, json &config)
+{
+#ifdef OPENVISUS_FOUND
+    using namespace Visus;
+    VolumeBrick brick;
+
+    IdxModule::attach();
+
+    auto dataset = LoadDataset(idx_file);
+    auto access = dataset->createAccess();
+    const auto bounds = dataset->getLogicBox();
+    auto field = dataset->getDefaultField();
+    auto query = std::make_shared<BoxQuery>(dataset.get(), field, 0, 'r');
+    query->logic_box = bounds;
+    query->setResolutionRange(0, dataset->getMaxResolution());
+
+    dataset->beginQuery(query);
+    if (!dataset->executeQuery(access, query)) {
+        std::cerr << "[error]: OpenVisus failed to execute query on " << idx_file << "\n";
+        throw std::runtime_error("[error]: OpenVisus failed to execute query");
+    }
+
+    brick.bounds =
+        math::box3f(math::vec3f(0), math::vec3f(bounds.p2[0], bounds.p2[1], bounds.p2[2]));
+    brick.dims =
+        math::vec3i(query->buffer.dims[0], query->buffer.dims[1], query->buffer.dims[2]);
+    config["dims"] = {brick.dims.x, brick.dims.y, brick.dims.z};
+    config["spacing"] = {1, 1, 1};
+
+    brick.brick = cpp::Volume("structured_regular");
+    brick.brick.setParam("dimensions", brick.dims);
+
+    size_t voxel_size = 0;
+    std::string voxel_type;
+    const auto visus_dtype = query->field.dtype;
+    if (visus_dtype == DTypes::UINT8) {
+        voxel_type = "uint8";
+        voxel_size = 1;
+        brick.brick.setParam("voxelType", int(OSP_UCHAR));
+    } else if (visus_dtype == DTypes::UINT16) {
+        voxel_type = "uint16";
+        voxel_size = 2;
+        brick.brick.setParam("voxelType", int(OSP_USHORT));
+    } else if (visus_dtype == DTypes::FLOAT32) {
+        voxel_type = "float32";
+        voxel_size = 4;
+        brick.brick.setParam("voxelType", int(OSP_FLOAT));
+    } else if (visus_dtype == DTypes::FLOAT64) {
+        voxel_type = "float64";
+        voxel_size = 8;
+        brick.brick.setParam("voxelType", int(OSP_DOUBLE));
+    }
+    config["type"] = voxel_type;
+
+    const size_t n_voxels = size_t(brick.dims.x) * size_t(brick.dims.y) * size_t(brick.dims.z);
+    brick.voxel_data = std::make_shared<std::vector<uint8_t>>(n_voxels * voxel_size, 0);
+    std::memcpy(brick.voxel_data->data(), query->buffer.c_ptr(), brick.voxel_data->size());
+
+    cpp::Data osp_data;
+    if (voxel_type == "uint8") {
+        osp_data = cpp::Data(*brick.voxel_data, true);
+    } else if (voxel_type == "uint16") {
+        osp_data =
+            cpp::Data(n_voxels, reinterpret_cast<uint16_t *>(brick.voxel_data->data()), true);
+    } else if (voxel_type == "float32") {
+        osp_data =
+            cpp::Data(n_voxels, reinterpret_cast<float *>(brick.voxel_data->data()), true);
+    } else if (voxel_type == "float64") {
+        osp_data =
+            cpp::Data(n_voxels, reinterpret_cast<double *>(brick.voxel_data->data()), true);
+    }
+    brick.brick.setParam("voxelData", osp_data);
+    brick.brick.commit();
+    IdxModule::detach();
+    return brick;
+#else
+    std::cerr << "[error]: Compile with OpenVisus to include support for loading IDX files\n";
+#endif
 }
 
 cpp::Geometry extract_isosurfaces(const json &config, const VolumeBrick &brick, float isovalue)

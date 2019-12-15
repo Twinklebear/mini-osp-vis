@@ -51,11 +51,16 @@ void main(void){
 })";
 
 const std::string USAGE =
+#ifdef OPENVISUS_FOUND
+    "./mini_scivis <volume.json/idx> [options]\n"
+#else
     "./mini_scivis <volume.json> [options]\n"
+#endif
     "Options:\n"
-    "  -iso <val>       Render an isosurface at the specified value\n"
-    "  -vr <lo> <hi>    Provide the value range for the volume to skip computing it\n"
-    "  -h               Print this help.";
+    "  -iso <val>               Render an isosurface at the specified value\n"
+    "  -vr <lo> <hi>            Provide the value range for the volume to skip computing it\n"
+    "  -r (scivis|pathtracer)   Select the OSPRay renderer to use\n"
+    "  -h                       Print this help.";
 
 int win_width = 1280;
 int win_height = 720;
@@ -144,32 +149,48 @@ int main(int argc, const char **argv)
 void run_app(const std::vector<std::string> &args, SDL_Window *window)
 {
     json config;
+    std::string idx_file;
     math::vec2f value_range(std::numeric_limits<float>::infinity());
     float isovalue = std::numeric_limits<float>::infinity();
+    std::string renderer_type = "scivis";
+    VolumeBrick brick;
     for (size_t i = 1; i < args.size(); ++i) {
         if (args[i] == "-vr") {
             value_range.x = std::stof(args[++i]);
             value_range.y = std::stof(args[++i]);
         } else if (args[i] == "-iso") {
             isovalue = std::stof(args[++i]);
+        } else if (args[i] == "-r") {
+            renderer_type = args[++i];
         } else if (args[i] == "-h") {
             std::cout << USAGE << "\n";
             return;
         } else {
-            std::ifstream cfg_file(args[i].c_str());
-            cfg_file >> config;
+            if (get_file_extension(args[i]) == "json") {
+                std::ifstream cfg_file(args[i].c_str());
+                cfg_file >> config;
 
-            std::string base_path = get_file_basepath(args[i]);
-            if (base_path == args[i]) {
-                base_path = ".";
+                std::string base_path = get_file_basepath(args[i]);
+                if (base_path == args[i]) {
+                    base_path = ".";
+                }
+                const std::string base_name = get_file_basename(config["url"]);
+                config["volume"] = base_path + "/" + base_name;
+                brick = load_raw_volume(config);
+            } else {
+#ifdef OPENVISUS_FOUND
+                config = json();
+                brick = load_idx_volume(args[i], config);
+#else
+                std::cerr << "[error]: Requested to load non-JSON file data " << args[i]
+                          << ", but OpenVisus was not found\n";
+                std::exit(1);
+#endif
             }
-            const std::string base_name = get_file_basename(config["url"]);
-            config["volume"] = base_path + "/" + base_name;
         }
     }
     std::cout << config.dump(4) << "\n";
 
-    VolumeBrick brick = load_volume_brick(config);
     if (!std::isfinite(value_range.x) || !std::isfinite(value_range.y)) {
         std::cout << "Computing value range\n";
         const std::string voxel_type = config["type"].get<std::string>();
@@ -213,7 +234,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     tfn.setParam("valueRange", value_range);
     tfn.commit();
 
-    cpp::Renderer renderer("pathtracer");
+    cpp::Renderer renderer(renderer_type);
     renderer.commit();
 
     cpp::VolumetricModel model(brick.brick);
@@ -227,7 +248,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     if (std::isfinite(isovalue)) {
         auto geom = extract_isosurfaces(config, brick, isovalue);
         if (geom) {
-            cpp::Material material("scivis", "default");
+            cpp::Material material(renderer_type, "default");
             material.setParam("Kd", math::vec3f(1.f));
             material.commit();
 
@@ -388,17 +409,16 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
             ImGui::End();
         }
 
-
         if (ImGui::Begin("Transfer Function")) {
             tfn_widget.draw_ui();
             if (tfn_widget.changed()) {
                 tfn_widget.get_colormapf(tfn_colors, tfn_opacities);
                 tfn.setParam("color",
-                        cpp::Data(tfn_colors.size() / 3,
-                            reinterpret_cast<math::vec3f *>(tfn_colors.data()),
-                            true));
+                             cpp::Data(tfn_colors.size() / 3,
+                                       reinterpret_cast<math::vec3f *>(tfn_colors.data()),
+                                       true));
                 tfn.setParam("opacity",
-                        cpp::Data(tfn_opacities.size(), tfn_opacities.data(), true));
+                             cpp::Data(tfn_opacities.size(), tfn_opacities.data(), true));
                 tfn.setParam("valueRange", value_range);
                 tfn.commit();
                 model.commit();
