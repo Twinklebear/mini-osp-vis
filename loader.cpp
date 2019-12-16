@@ -233,6 +233,7 @@ cpp::Geometry extract_isosurfaces(const json &config, const VolumeBrick &brick, 
         indices.push_back(tids);
     }
     if (!indices.empty()) {
+        std::cout << "Isosurface has " << indices.size() << " triangles\n";
         isosurface = cpp::Geometry("mesh");
         isosurface.setParam("vertex.position", cpp::Data(vertices));
         isosurface.setParam("index", cpp::Data(indices));
