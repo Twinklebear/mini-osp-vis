@@ -13,6 +13,7 @@
 #include "imgui_impl_opengl3.h"
 #include "imgui_impl_sdl.h"
 #include "loader.h"
+#include "stb_image_write.h"
 #include "util/arcball_camera.h"
 #include "util/json.hpp"
 #include "util/shader.h"
@@ -308,10 +309,16 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     glClearColor(0.0, 0.0, 0.0, 0.0);
     glDisable(GL_DEPTH_TEST);
 
+    // Start rendering asynchronously
+    cpp::Future future = fb.renderFrame(renderer, camera, world);
+    std::vector<OSPObject> pending_commits;
+
     ImGuiIO &io = ImGui::GetIO();
     glm::vec2 prev_mouse(-2.f);
     bool done = false;
     bool camera_changed = true;
+    bool window_changed = false;
+    bool take_screenshot = false;
     while (!done) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
@@ -329,6 +336,8 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
                     std::cout << "-eye " << eye.x << " " << eye.y << " " << eye.z << " -dir "
                               << dir.x << " " << dir.y << " " << dir.z << " -up " << up.x
                               << " " << up.y << " " << up.z << "\n";
+                } else if (event.key.keysym.sym == SDLK_c) {
+                    take_screenshot = true;
                 }
             }
             if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE &&
@@ -356,13 +365,14 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
             }
             if (event.type == SDL_WINDOWEVENT &&
                 event.window.event == SDL_WINDOWEVENT_RESIZED) {
+                window_changed = true;
                 win_width = event.window.data1;
                 win_height = event.window.data2;
                 io.DisplaySize.x = win_width;
                 io.DisplaySize.y = win_height;
 
                 camera.setParam("aspect", static_cast<float>(win_width) / win_height);
-                camera.commit();
+                pending_commits.push_back(camera.handle());
 
                 // make new framebuffer
                 fb = cpp::FrameBuffer(math::vec2i(win_width, win_height),
@@ -391,8 +401,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
             camera.setParam("position", math::vec3f(cam_eye.x, cam_eye.y, cam_eye.z));
             camera.setParam("direction", math::vec3f(cam_dir.x, cam_dir.y, cam_dir.z));
             camera.setParam("up", math::vec3f(cam_up.x, cam_up.y, cam_up.z));
-            camera.commit();
-            fb.clear();
+            pending_commits.push_back(camera.handle());
         }
 
         ImGui_ImplOpenGL3_NewFrame();
@@ -403,19 +412,57 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
             static float density_scale = 1.f;
             if (ImGui::SliderFloat("Density Scale", &density_scale, 0.5f, 10.f)) {
                 brick.model.setParam("densityScale", density_scale);
-                brick.model.commit();
-                fb.clear();
+                pending_commits.push_back(brick.model.handle());
             }
             if (ImGui::SliderFloat("Sampling Rate", &sampling_rate, 0.1f, 5.f)) {
                 renderer.setParam("volumeSamplingRate", sampling_rate);
-                renderer.commit();
-                fb.clear();
+                pending_commits.push_back(renderer.handle());
             }
             ImGui::End();
         }
 
         if (ImGui::Begin("Transfer Function")) {
+            if (ImGui::Button("Save Transfer Function")) {
+                auto tfn_img = tfn_widget.get_colormap();
+                stbi_write_png("transfer_function.png",
+                               tfn_img.size() / 4,
+                               1,
+                               4,
+                               tfn_img.data(),
+                               tfn_img.size());
+                std::cout << "Transfer function saved to 'transfer_function.png'\n";
+            }
             tfn_widget.draw_ui();
+            ImGui::End();
+        }
+
+        // Rendering
+        ImGui::Render();
+        glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
+
+        if (future.isReady()) {
+            if (!window_changed) {
+                uint32_t *img = (uint32_t *)fb.map(OSP_FB_COLOR);
+                glTexSubImage2D(GL_TEXTURE_2D,
+                                0,
+                                0,
+                                0,
+                                win_width,
+                                win_height,
+                                GL_RGBA,
+                                GL_UNSIGNED_BYTE,
+                                img);
+                if (take_screenshot) {
+                    take_screenshot = false;
+                    stbi_flip_vertically_on_write(1);
+                    stbi_write_jpg("mini_scivis.jpg", win_width, win_height, 4, img, 90);
+                    std::cout << "Screenshot saved to 'mini_scivis.jpg'\n";
+                    stbi_flip_vertically_on_write(0);
+                }
+                fb.unmap(img);
+            }
+            window_changed = false;
+
             if (tfn_widget.changed()) {
                 tfn_widget.get_colormapf(tfn_colors, tfn_opacities);
                 tfn.setParam("color",
@@ -425,23 +472,20 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
                 tfn.setParam("opacity",
                              cpp::Data(tfn_opacities.size(), tfn_opacities.data(), true));
                 tfn.setParam("valueRange", value_range);
-                tfn.commit();
-                brick.model.commit();
+                pending_commits.push_back(tfn.handle());
+                pending_commits.push_back(brick.model.handle());
+            }
+
+            if (!pending_commits.empty()) {
                 fb.clear();
             }
-            ImGui::End();
+            for (auto &c : pending_commits) {
+                ospCommit(c);
+            }
+            pending_commits.clear();
+
+            future = fb.renderFrame(renderer, camera, world);
         }
-
-        fb.renderFrame(renderer, camera, world);
-
-        // Rendering
-        ImGui::Render();
-        glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
-
-        uint32_t *img = (uint32_t *)fb.map(OSP_FB_COLOR);
-        glTexSubImage2D(
-            GL_TEXTURE_2D, 0, 0, 0, win_width, win_height, GL_RGBA, GL_UNSIGNED_BYTE, img);
-        fb.unmap(img);
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glUseProgram(display_render.program);
