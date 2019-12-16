@@ -81,14 +81,15 @@ VolumeBrick load_raw_volume(const json &config)
     }
     brick.brick.setParam("voxelData", osp_data);
     brick.brick.commit();
+    brick.model = cpp::VolumetricModel(brick.brick);
     return brick;
 }
 
 VolumeBrick load_idx_volume(const std::string &idx_file, json &config)
 {
+    VolumeBrick brick;
 #ifdef OPENVISUS_FOUND
     using namespace Visus;
-    VolumeBrick brick;
 
     IdxModule::attach();
 
@@ -157,11 +158,13 @@ VolumeBrick load_idx_volume(const std::string &idx_file, json &config)
     }
     brick.brick.setParam("voxelData", osp_data);
     brick.brick.commit();
+    brick.model = cpp::VolumetricModel(brick.brick);
     IdxModule::detach();
-    return brick;
 #else
     std::cerr << "[error]: Compile with OpenVisus to include support for loading IDX files\n";
+    throw std::runtime_error("OpenVisus is required for IDX support");
 #endif
+    return brick;
 }
 
 cpp::Geometry extract_isosurfaces(const json &config, const VolumeBrick &brick, float isovalue)
@@ -238,9 +241,10 @@ cpp::Geometry extract_isosurfaces(const json &config, const VolumeBrick &brick, 
         std::cout << "Isosurface at " << isovalue << " is empty\n";
     }
 #else
-    // TODO: Use ospray's implicit isosurfaces
-    std::cerr << "[warning]: Scene requested isosurface geometry, but app was not compiled "
-                 "with VTK to support explicit isosurfaces.\n";
+    isosurface = cpp::Geometry("isosurfaces");
+    isosurface.setParam("isovalue", isovalue);
+    isosurface.setParam("volume", brick.model);
+    isosurface.commit();
 #endif
     return isosurface;
 }

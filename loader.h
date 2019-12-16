@@ -16,6 +16,7 @@ using json = nlohmann::json;
 
 struct VolumeBrick {
     cpp::Volume brick;
+    cpp::VolumetricModel model;
     math::box3f bounds;
     math::vec3i dims;
     std::shared_ptr<std::vector<uint8_t>> voxel_data;

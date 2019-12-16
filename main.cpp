@@ -118,7 +118,7 @@ int main(int argc, const char **argv)
     // set an error callback to catch any OSPRay errors and exit the application
     ospDeviceSetErrorFunc(ospGetCurrentDevice(), [](OSPError error, const char *msg) {
         std::cerr << "[OSPRay error]: " << msg << std::endl << std::flush;
-        std::exit(error);
+        throw std::runtime_error(msg);
     });
 
     // Setup Dear ImGui context
@@ -237,13 +237,12 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     cpp::Renderer renderer(renderer_type);
     renderer.commit();
 
-    cpp::VolumetricModel model(brick.brick);
-    model.setParam("transferFunction", tfn);
-    model.setParam("samplingRate", 1.f);
-    model.commit();
+    brick.model.setParam("transferFunction", tfn);
+    brick.model.setParam("samplingRate", 1.f);
+    brick.model.commit();
 
     cpp::Group group;
-    group.setParam("volume", cpp::Data(model));
+    group.setParam("volume", cpp::Data(brick.model));
 
     if (std::isfinite(isovalue)) {
         auto geom = extract_isosurfaces(config, brick, isovalue);
@@ -402,8 +401,8 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
         if (ImGui::Begin("Params")) {
             static float density_scale = 1.f;
             if (ImGui::SliderFloat("Density Scale", &density_scale, 0.5f, 10.f)) {
-                model.setParam("densityScale", density_scale);
-                model.commit();
+                brick.model.setParam("densityScale", density_scale);
+                brick.model.commit();
                 fb.clear();
             }
             ImGui::End();
@@ -421,8 +420,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
                              cpp::Data(tfn_opacities.size(), tfn_opacities.data(), true));
                 tfn.setParam("valueRange", value_range);
                 tfn.commit();
-                brick.brick.commit();
-                model.commit();
+                brick.model.commit();
                 fb.clear();
             }
             ImGui::End();
