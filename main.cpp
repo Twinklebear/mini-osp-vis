@@ -235,10 +235,11 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     tfn.commit();
 
     cpp::Renderer renderer(renderer_type);
+    float sampling_rate = 1.f;
+    renderer.setParam("volumeSamplingRate", sampling_rate);
     renderer.commit();
 
     brick.model.setParam("transferFunction", tfn);
-    brick.model.setParam("samplingRate", 1.f);
     brick.model.commit();
 
     cpp::Group group;
@@ -403,6 +404,11 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
             if (ImGui::SliderFloat("Density Scale", &density_scale, 0.5f, 10.f)) {
                 brick.model.setParam("densityScale", density_scale);
                 brick.model.commit();
+                fb.clear();
+            }
+            if (ImGui::SliderFloat("Sampling Rate", &sampling_rate, 0.1f, 5.f)) {
+                renderer.setParam("volumeSamplingRate", sampling_rate);
+                renderer.commit();
                 fb.clear();
             }
             ImGui::End();
