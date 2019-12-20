@@ -68,7 +68,7 @@ VolumeBrick load_raw_volume(const json &config)
 
     cpp::Data osp_data;
     if (voxel_type_string == "uint8") {
-        osp_data = cpp::Data(*brick.voxel_data, true);
+        osp_data = cpp::Data(n_voxels, brick.voxel_data->data(), true);
     } else if (voxel_type_string == "uint16") {
         osp_data =
             cpp::Data(n_voxels, reinterpret_cast<uint16_t *>(brick.voxel_data->data()), true);
@@ -79,7 +79,7 @@ VolumeBrick load_raw_volume(const json &config)
         osp_data =
             cpp::Data(n_voxels, reinterpret_cast<double *>(brick.voxel_data->data()), true);
     }
-    brick.brick.setParam("voxelData", osp_data);
+    brick.brick.setParam("data", osp_data);
     brick.brick.commit();
     brick.model = cpp::VolumetricModel(brick.brick);
     return brick;
@@ -156,7 +156,7 @@ VolumeBrick load_idx_volume(const std::string &idx_file, json &config)
         osp_data =
             cpp::Data(n_voxels, reinterpret_cast<double *>(brick.voxel_data->data()), true);
     }
-    brick.brick.setParam("voxelData", osp_data);
+    brick.brick.setParam("data", osp_data);
     brick.brick.commit();
     brick.model = cpp::VolumetricModel(brick.brick);
     IdxModule::detach();
