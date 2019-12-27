@@ -11,15 +11,19 @@ if len(sys.argv) != 2:
     sys.exit(1)
 
 r = requests.get("http://sci.utah.edu/~klacansky/cdn/open-scivis-datasets/{}/{}.json".format(sys.argv[1], sys.argv[1]))
-print(r.json())
-
 meta = r.json()
-r = requests.get(meta["url"])
-data = bytes(r.content)
+print(json.dumps(meta, indent=4))
 
 with open(sys.argv[1] + ".json", "w") as f:
-    f.write(json.dumps(meta))
+    f.write(json.dumps(meta, indent=4))
 
-with open(os.path.basename(meta["url"]), "wb") as f:
-    f.write(data)
+volume_file = os.path.basename(meta["url"])
+if not os.path.isfile(volume_file):
+    print("Fetching volume from {}".format(meta["url"]))
+    r = requests.get(meta["url"])
+    data = bytes(r.content)
+    with open(volume, "wb") as f:
+        f.write(data)
+else:
+    print("File {} already exists, not re-downloading".format(volume_file))
 
