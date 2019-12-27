@@ -57,7 +57,7 @@ VolumeBrick load_raw_volume(const json &config)
         throw std::runtime_error("Unrecognized voxel type " + voxel_type_string);
     }
 
-    const size_t n_voxels = size_t(brick.dims.x) * size_t(brick.dims.y) * size_t(brick.dims.z);
+    const size_t n_voxels = brick.dims.long_product();
     brick.voxel_data = std::make_shared<std::vector<uint8_t>>(n_voxels * voxel_size, 0);
 
     std::ifstream fin(volume_file.c_str(), std::ios::binary);
