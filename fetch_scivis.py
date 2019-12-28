@@ -22,7 +22,7 @@ if not os.path.isfile(volume_file):
     print("Fetching volume from {}".format(meta["url"]))
     r = requests.get(meta["url"])
     data = bytes(r.content)
-    with open(volume, "wb") as f:
+    with open(volume_file, "wb") as f:
         f.write(data)
 else:
     print("File {} already exists, not re-downloading".format(volume_file))
