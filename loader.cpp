@@ -68,16 +68,19 @@ VolumeBrick load_raw_volume(const json &config)
 
     cpp::Data osp_data;
     if (voxel_type_string == "uint8") {
-        osp_data = cpp::Data(n_voxels, brick.voxel_data->data(), true);
+        osp_data = cpp::Data(math::vec3ul(brick.dims), brick.voxel_data->data(), true);
     } else if (voxel_type_string == "uint16") {
-        osp_data =
-            cpp::Data(n_voxels, reinterpret_cast<uint16_t *>(brick.voxel_data->data()), true);
+        osp_data = cpp::Data(math::vec3ul(brick.dims),
+                             reinterpret_cast<uint16_t *>(brick.voxel_data->data()),
+                             true);
     } else if (voxel_type_string == "float32") {
-        osp_data =
-            cpp::Data(n_voxels, reinterpret_cast<float *>(brick.voxel_data->data()), true);
+        osp_data = cpp::Data(math::vec3ul(brick.dims),
+                             reinterpret_cast<float *>(brick.voxel_data->data()),
+                             true);
     } else if (voxel_type_string == "float64") {
-        osp_data =
-            cpp::Data(n_voxels, reinterpret_cast<double *>(brick.voxel_data->data()), true);
+        osp_data = cpp::Data(math::vec3ul(brick.dims),
+                             reinterpret_cast<double *>(brick.voxel_data->data()),
+                             true);
     }
     brick.brick.setParam("data", osp_data);
     brick.brick.commit();
@@ -145,16 +148,19 @@ VolumeBrick load_idx_volume(const std::string &idx_file, json &config)
 
     cpp::Data osp_data;
     if (voxel_type == "uint8") {
-        osp_data = cpp::Data(*brick.voxel_data, true);
+        osp_data = cpp::Data(math::vec3ul(brick.dims), brick.voxel_data->data(), true);
     } else if (voxel_type == "uint16") {
-        osp_data =
-            cpp::Data(n_voxels, reinterpret_cast<uint16_t *>(brick.voxel_data->data()), true);
+        osp_data = cpp::Data(math::vec3ul(brick.dims),
+                             reinterpret_cast<uint16_t *>(brick.voxel_data->data()),
+                             true);
     } else if (voxel_type == "float32") {
-        osp_data =
-            cpp::Data(n_voxels, reinterpret_cast<float *>(brick.voxel_data->data()), true);
+        osp_data = cpp::Data(math::vec3ul(brick.dims),
+                             reinterpret_cast<float *>(brick.voxel_data->data()),
+                             true);
     } else if (voxel_type == "float64") {
-        osp_data =
-            cpp::Data(n_voxels, reinterpret_cast<double *>(brick.voxel_data->data()), true);
+        osp_data = cpp::Data(math::vec3ul(brick.dims),
+                             reinterpret_cast<double *>(brick.voxel_data->data()),
+                             true);
     }
     brick.brick.setParam("data", osp_data);
     brick.brick.commit();
