@@ -35,7 +35,7 @@ VolumeBrick load_raw_volume(const json &config)
     brick.dims = get_vec<int, 3>(config["size"]);
     brick.bounds = math::box3f(math::vec3f(0), brick.dims * grid_spacing);
 
-    brick.brick = cpp::Volume("structured_regular");
+    brick.brick = cpp::Volume("structuredRegular");
     brick.brick.setParam("dimensions", brick.dims);
     brick.brick.setParam("gridSpacing", grid_spacing);
 
@@ -117,7 +117,7 @@ VolumeBrick load_idx_volume(const std::string &idx_file, json &config)
     config["dims"] = {brick.dims.x, brick.dims.y, brick.dims.z};
     config["spacing"] = {1, 1, 1};
 
-    brick.brick = cpp::Volume("structured_regular");
+    brick.brick = cpp::Volume("structuredRegular");
     brick.brick.setParam("dimensions", brick.dims);
 
     size_t voxel_size = 0;

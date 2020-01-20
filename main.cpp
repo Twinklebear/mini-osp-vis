@@ -226,7 +226,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     std::vector<float> tfn_opacities;
     tfn_widget.get_colormapf(tfn_colors, tfn_opacities);
 
-    cpp::TransferFunction tfn("piecewise_linear");
+    cpp::TransferFunction tfn("piecewiseLinear");
     tfn.setParam(
         "color",
         cpp::Data(
@@ -249,8 +249,8 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     if (std::isfinite(isovalue)) {
         auto geom = extract_isosurfaces(config, brick, isovalue);
         if (geom) {
-            cpp::Material material(renderer_type, "default");
-            material.setParam("Kd", math::vec3f(0.2f, 0.5f, 0.8f));
+            cpp::Material material(renderer_type, "obj");
+            material.setParam("Kd", math::vec3f(0.9f, 0.9f, 0.9f));
             material.commit();
 
             cpp::GeometricModel geom_model;
@@ -269,9 +269,14 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     cpp::Light ambient_light("ambient");
     ambient_light.commit();
 
+    cpp::Light directional_light("distant");
+    directional_light.setParam("direction", math::vec3f(0.5f, -1.f, 0.25f));
+    directional_light.commit();
+    std::vector<cpp::Light> lights = {ambient_light, directional_light};
+
     cpp::World world;
     world.setParam("instance", cpp::Data(instance));
-    world.setParam("light", cpp::Data(ambient_light));
+    world.setParam("light", cpp::Data(lights));
     world.commit();
 
     glm::vec3 cam_eye = arcball.eye();
@@ -283,6 +288,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     camera.setParam("position", math::vec3f(cam_eye.x, cam_eye.y, cam_eye.z));
     camera.setParam("direction", math::vec3f(cam_dir.x, cam_dir.y, cam_dir.z));
     camera.setParam("up", math::vec3f(cam_up.x, cam_up.y, cam_up.z));
+    camera.setParam("fovy", 40.f);
     camera.commit();
 
     cpp::FrameBuffer fb(
