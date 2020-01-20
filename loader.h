@@ -26,6 +26,8 @@ VolumeBrick load_raw_volume(const json &config);
 
 VolumeBrick load_idx_volume(const std::string &idx_file, json &config);
 
+VolumeBrick load_dns_brick(const std::string &size_file);
+
 cpp::Geometry extract_isosurfaces(const json &config,
                                   const VolumeBrick &brick,
                                   float isovalue);

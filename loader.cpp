@@ -173,6 +173,45 @@ VolumeBrick load_idx_volume(const std::string &idx_file, json &config)
     return brick;
 }
 
+VolumeBrick load_dns_brick(const std::string &size_file)
+{
+    VolumeBrick brick;
+
+    const size_t fnd = size_file.find_last_of('.');
+    std::string volume_file = size_file.substr(0, fnd) + "-t0.raw";
+    {
+        std::ifstream fin(size_file.c_str());
+        fin >> brick.dims.x >> brick.dims.y >> brick.dims.z >> brick.bounds.lower.x >>
+            brick.bounds.lower.y >> brick.bounds.lower.z >> brick.bounds.upper.x >>
+            brick.bounds.upper.y >> brick.bounds.upper.z;
+    }
+    const math::vec3f grid_spacing = brick.bounds.size() / math::vec3f(brick.dims);
+    std::cout << "brick " << size_file << " dims: " << brick.dims
+              << "\nbounds: " << brick.bounds << "\n"
+              << "grid spacing: " << grid_spacing << "\n";
+
+    brick.brick = cpp::Volume("structuredRegular");
+    brick.brick.setParam("dimensions", brick.dims);
+    brick.brick.setParam("gridSpacing", grid_spacing);
+    brick.brick.setParam("voxelType", int(OSP_DOUBLE));
+
+    const size_t n_voxels = brick.dims.long_product();
+    brick.voxel_data = std::make_shared<std::vector<uint8_t>>(n_voxels * 8, 0);
+
+    std::ifstream fin(volume_file.c_str(), std::ios::binary);
+    if (!fin.read(reinterpret_cast<char *>(brick.voxel_data->data()),
+                  brick.voxel_data->size())) {
+        throw std::runtime_error("Failed to read volume " + volume_file);
+    }
+
+    cpp::Data osp_data = cpp::Data(
+        math::vec3ul(brick.dims), reinterpret_cast<double *>(brick.voxel_data->data()), true);
+    brick.brick.setParam("data", osp_data);
+    brick.brick.commit();
+    brick.model = cpp::VolumetricModel(brick.brick);
+    return brick;
+}
+
 cpp::Geometry extract_isosurfaces(const json &config, const VolumeBrick &brick, float isovalue)
 {
     cpp::Geometry isosurface;

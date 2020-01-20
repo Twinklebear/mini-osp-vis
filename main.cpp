@@ -154,7 +154,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     math::vec2f value_range(std::numeric_limits<float>::infinity());
     float isovalue = std::numeric_limits<float>::infinity();
     std::string renderer_type = "scivis";
-    VolumeBrick brick;
+    std::vector<VolumeBrick> bricks;
     for (size_t i = 1; i < args.size(); ++i) {
         if (args[i] == "-vr") {
             value_range.x = std::stof(args[++i]);
@@ -177,11 +177,14 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
                 }
                 const std::string base_name = get_file_basename(config["url"]);
                 config["volume"] = base_path + "/" + base_name;
-                brick = load_raw_volume(config);
+                bricks.push_back(load_raw_volume(config));
+            } else if (get_file_extension(args[i]) == "size") {
+                config["type"] = "float64";
+                bricks.push_back(load_dns_brick(args[i]));
             } else {
 #ifdef OPENVISUS_FOUND
                 config = json();
-                brick = load_idx_volume(args[i], config);
+                bricks.push_back(load_idx_volume(args[i], config));
 #else
                 std::cerr << "[error]: Requested to load non-JSON file data " << args[i]
                           << ", but OpenVisus was not found\n";
@@ -195,27 +198,37 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     if (!std::isfinite(value_range.x) || !std::isfinite(value_range.y)) {
         std::cout << "Computing value range\n";
         const std::string voxel_type = config["type"].get<std::string>();
-        if (voxel_type == "uint8") {
-            value_range =
-                compute_value_range(brick.voxel_data->data(), brick.voxel_data->size());
-        } else if (voxel_type == "uint16") {
-            value_range =
-                compute_value_range(reinterpret_cast<uint16_t *>(brick.voxel_data->data()),
-                                    brick.voxel_data->size() / sizeof(uint16_t));
-        } else if (voxel_type == "float32") {
-            value_range =
-                compute_value_range(reinterpret_cast<float *>(brick.voxel_data->data()),
-                                    brick.voxel_data->size() / sizeof(float));
-        } else if (voxel_type == "float64") {
-            value_range =
-                compute_value_range(reinterpret_cast<double *>(brick.voxel_data->data()),
-                                    brick.voxel_data->size() / sizeof(double));
+        value_range.x = std::numeric_limits<float>::infinity();
+        value_range.y = -std::numeric_limits<float>::infinity();
+        for (const auto &b : bricks) {
+            math::vec2f brick_vr;
+            if (voxel_type == "uint8") {
+                brick_vr = compute_value_range(b.voxel_data->data(), b.voxel_data->size());
+            } else if (voxel_type == "uint16") {
+                brick_vr =
+                    compute_value_range(reinterpret_cast<uint16_t *>(b.voxel_data->data()),
+                                        b.voxel_data->size() / sizeof(uint16_t));
+            } else if (voxel_type == "float32") {
+                brick_vr = compute_value_range(reinterpret_cast<float *>(b.voxel_data->data()),
+                                               b.voxel_data->size() / sizeof(float));
+            } else if (voxel_type == "float64") {
+                brick_vr =
+                    compute_value_range(reinterpret_cast<double *>(b.voxel_data->data()),
+                                        b.voxel_data->size() / sizeof(double));
+            }
+            value_range.x = std::min(value_range.x, brick_vr.x);
+            value_range.y = std::max(value_range.y, brick_vr.y);
         }
         std::cout << "Computed value range: " << value_range << "\n";
     }
 
-    const float world_diagonal = math::length(brick.bounds.size());
-    const math::vec3f world_center = brick.bounds.center();
+    math::box3f world_bounds = bricks[0].bounds;
+    for (const auto &b : bricks) {
+        world_bounds.extend(b.bounds);
+    }
+
+    const float world_diagonal = math::length(world_bounds.size());
+    const math::vec3f world_center = world_bounds.center();
     ArcballCamera arcball(
         glm::vec3(world_center.x, world_center.y, world_center.z - world_diagonal * 1.5),
         glm::vec3(world_center.x, world_center.y, world_center.z),
@@ -240,30 +253,46 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     renderer.setParam("volumeSamplingRate", sampling_rate);
     renderer.commit();
 
-    brick.model.setParam("transferFunction", tfn);
-    brick.model.commit();
+    for (auto &b : bricks) {
+        b.model.setParam("transferFunction", tfn);
+        b.model.commit();
+    }
 
-    cpp::Group group;
-    group.setParam("volume", cpp::Data(brick.model));
+    std::vector<cpp::Group> groups;
+    for (auto &b : bricks) {
+        cpp::Group g;
+        g.setParam("volume", cpp::Data(b.model));
+        groups.push_back(g);
+    }
+
+    cpp::Material iso_material(renderer_type, "obj");
+    iso_material.setParam("Kd", math::vec3f(0.9f, 0.9f, 0.9f));
+    iso_material.commit();
 
     if (std::isfinite(isovalue)) {
-        auto geom = extract_isosurfaces(config, brick, isovalue);
-        if (geom) {
-            cpp::Material material(renderer_type, "obj");
-            material.setParam("Kd", math::vec3f(0.9f, 0.9f, 0.9f));
-            material.commit();
-
-            cpp::GeometricModel geom_model;
-            geom_model = cpp::GeometricModel(geom);
-            geom_model.setParam("material", material);
-            geom_model.commit();
-            group.setParam("geometry", cpp::Data(geom_model));
+        for (size_t i = 0; i < bricks.size(); ++i) {
+            auto geom = extract_isosurfaces(config, bricks[i], isovalue);
+            if (geom) {
+                cpp::GeometricModel geom_model;
+                geom_model = cpp::GeometricModel(geom);
+                geom_model.setParam("material", iso_material);
+                geom_model.commit();
+                groups[i].setParam("geometry", cpp::Data(geom_model));
+            }
         }
     }
-    group.commit();
+    for (auto &g : groups) {
+        g.commit();
+    }
 
-    cpp::Instance instance(group);
-    instance.commit();
+    std::vector<cpp::Instance> instances;
+    for (size_t i = 0; i < groups.size(); ++i) {
+        cpp::Instance instance(groups[i]);
+        auto transform = math::affine3f::translate(bricks[i].bounds.lower);
+        instance.setParam("xfm", transform);
+        instance.commit();
+        instances.push_back(instance);
+    }
 
     // create and setup an ambient light
     cpp::Light ambient_light("ambient");
@@ -275,7 +304,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     std::vector<cpp::Light> lights = {ambient_light, directional_light};
 
     cpp::World world;
-    world.setParam("instance", cpp::Data(instance));
+    world.setParam("instance", cpp::Data(instances));
     world.setParam("light", cpp::Data(lights));
     world.commit();
 
@@ -417,8 +446,10 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
         if (ImGui::Begin("Params")) {
             static float density_scale = 1.f;
             if (ImGui::SliderFloat("Density Scale", &density_scale, 0.5f, 10.f)) {
-                brick.model.setParam("densityScale", density_scale);
-                pending_commits.push_back(brick.model.handle());
+                for (auto &b : bricks) {
+                    b.model.setParam("densityScale", density_scale);
+                    pending_commits.push_back(b.model.handle());
+                }
             }
             if (ImGui::SliderFloat("Sampling Rate", &sampling_rate, 0.1f, 5.f)) {
                 renderer.setParam("volumeSamplingRate", sampling_rate);
@@ -479,7 +510,9 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
                              cpp::Data(tfn_opacities.size(), tfn_opacities.data(), true));
                 tfn.setParam("valueRange", value_range);
                 pending_commits.push_back(tfn.handle());
-                pending_commits.push_back(brick.model.handle());
+                for (auto &b : bricks) {
+                    pending_commits.push_back(b.model.handle());
+                }
             }
 
             if (!pending_commits.empty()) {
