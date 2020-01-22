@@ -5,7 +5,8 @@ Dependencies:
 - OSPRay 2.0
 - TBB
 - SDL2
-- GLM
+- GLM. For now please use my [fork of GLM](https://github.com/Twinklebear/glm) which provides
+    some CMake utilities.
 - VTK (optional) for computing explicit triangle isosurfaces for testing
 - OpenVisus (optional) for loading IDX volumes
 

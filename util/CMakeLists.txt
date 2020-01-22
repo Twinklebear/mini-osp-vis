@@ -14,6 +14,7 @@ target_link_libraries(util PUBLIC
     ospcommon::ospcommon
     TBB::tbb
     imgui
+    glm::glm
     ${SDL2_LIBRARY}
     ${OPENGL_LIBRARY})
 
