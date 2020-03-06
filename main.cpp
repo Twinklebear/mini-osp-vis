@@ -267,6 +267,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
 
     // create and setup an ambient light
     cpp::Light ambient_light("ambient");
+    ambient_light.setParam("intensity", 0.3f);
     ambient_light.commit();
 
     cpp::Light directional_light("distant");
