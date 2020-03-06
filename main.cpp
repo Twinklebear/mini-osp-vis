@@ -213,6 +213,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
         }
         std::cout << "Computed value range: " << value_range << "\n";
     }
+    math::vec2f ui_value_range = value_range;
 
     const float world_diagonal = math::length(brick.bounds.size());
     const math::vec3f world_center = brick.bounds.center();
@@ -232,7 +233,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
         cpp::Data(
             tfn_colors.size() / 3, reinterpret_cast<math::vec3f *>(tfn_colors.data()), true));
     tfn.setParam("opacity", cpp::Data(tfn_opacities.size(), tfn_opacities.data(), true));
-    tfn.setParam("valueRange", value_range);
+    tfn.setParam("valueRange", ui_value_range);
     tfn.commit();
 
     cpp::Renderer renderer(renderer_type);
@@ -424,6 +425,12 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
                 renderer.setParam("volumeSamplingRate", sampling_rate);
                 pending_commits.push_back(renderer.handle());
             }
+            if (ImGui::SliderFloat2(
+                    "Value Range", &ui_value_range.x, value_range.x, value_range.y)) {
+                tfn.setParam("valueRange", ui_value_range);
+                pending_commits.push_back(tfn.handle());
+                pending_commits.push_back(brick.model.handle());
+            }
             ImGui::End();
         }
 
@@ -477,7 +484,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
                                        true));
                 tfn.setParam("opacity",
                              cpp::Data(tfn_opacities.size(), tfn_opacities.data(), true));
-                tfn.setParam("valueRange", value_range);
+                tfn.setParam("valueRange", ui_value_range);
                 pending_commits.push_back(tfn.handle());
                 pending_commits.push_back(brick.model.handle());
             }
