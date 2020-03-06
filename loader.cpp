@@ -9,7 +9,7 @@
 #include "stb_image.h"
 #include "util.h"
 
-#ifdef VTK_FOUND
+#ifdef USE_EXPLICIT_ISOSURFACE
 #include <vtkDoubleArray.h>
 #include <vtkFloatArray.h>
 #include <vtkFlyingEdges3D.h>
@@ -176,7 +176,7 @@ VolumeBrick load_idx_volume(const std::string &idx_file, json &config)
 cpp::Geometry extract_isosurfaces(const json &config, const VolumeBrick &brick, float isovalue)
 {
     cpp::Geometry isosurface;
-#ifdef VTK_FOUND
+#ifdef USE_EXPLICIT_ISOSURFACE
     const std::string voxel_type_string = config["type"].get<std::string>();
     vtkSmartPointer<vtkDataArray> data_array = nullptr;
     if (voxel_type_string == "uint8") {
@@ -248,7 +248,7 @@ cpp::Geometry extract_isosurfaces(const json &config, const VolumeBrick &brick, 
         std::cout << "Isosurface at " << isovalue << " is empty\n";
     }
 #else
-    isosurface = cpp::Geometry("isosurfaces");
+    isosurface = cpp::Geometry("isosurface");
     isosurface.setParam("isovalue", isovalue);
     isosurface.setParam("volume", brick.model);
     isosurface.commit();

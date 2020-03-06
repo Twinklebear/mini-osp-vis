@@ -14,8 +14,12 @@ find_package(ospray 2.0 REQUIRED)
 find_package(ospcommon REQUIRED)
 find_package(TBB REQUIRED)
 find_package(glm REQUIRED)
-find_package(VTK)
 find_package(OpenVisus)
+
+option(USE_EXPLICIT_ISOSURFACE "Use explicit isosurface extraction with VTK" OFF)
+if (USE_EXPLICIT_ISOSURFACE)
+    find_package(VTK)
+endif()
 
 add_subdirectory(imgui)
 add_subdirectory(util)
@@ -48,9 +52,9 @@ target_compile_definitions(mini_scivis PUBLIC
     -DSDL_MAIN_HANDLED)
 
 
-if (${VTK_FOUND})
+if ("${VTK_FOUND}" AND USE_EXPLICIT_ISOSURFACE)
     target_compile_definitions(mini_scivis PUBLIC
-        -DVTK_FOUND=1)
+        -DUSE_EXPLICIT_ISOSURFACE=1)
     target_include_directories(mini_scivis PUBLIC
         ${VTK_INCLUDE_DIRS})
 
