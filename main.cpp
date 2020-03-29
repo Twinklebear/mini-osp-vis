@@ -75,10 +75,29 @@ const std::string USAGE =
     "\n"
     "  -iso-color <r> <g> <b>   Set the desired isosurface color (default light gray)\n"
     "\n"
+    "  -ambient <intensity>     Set the ambient light intensity\n"
+    "\n"
+    "  -dir1 <intensity> <x> <y> <z>\n"
+    "                           Set the first directional light intensity and direction\n"
+    "\n"
+    "  -dir2 <intensity> <x> <y> <z>\n"
+    "                           Set the second directional light intensity and direction\n"
+    "\n"
     "  -h                       Print this help.";
 
 int win_width = 1280;
 int win_height = 720;
+
+struct LightParams {
+    float intensity = 0.5f;
+    math::vec3f direction = math::vec3f(0.f);
+
+    LightParams() = default;
+    LightParams(float intensity) : intensity(intensity) {}
+    LightParams(float intensity, const math::vec3f &dir) : intensity(intensity), direction(dir)
+    {
+    }
+};
 
 glm::vec2 transform_mouse(glm::vec2 in)
 {
@@ -176,6 +195,11 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     math::vec3f background_color(1.f);
     math::vec3f isosurface_color(0.9f);
     std::vector<Colormap> cmdline_colormaps;
+    std::array<LightParams, 3> light_params = {
+        LightParams(0.3f),
+        LightParams(1.f, math::vec3f(0.5f, -1.f, 0.25f)),
+        LightParams(1.f, math::vec3f(-0.5f, -0.5f, 0.5f))};
+
     for (size_t i = 1; i < args.size(); ++i) {
         if (args[i] == "-vr") {
             value_range.x = std::stof(args[++i]);
@@ -213,6 +237,18 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
             isosurface_color.x = std::stof(args[++i]);
             isosurface_color.y = std::stof(args[++i]);
             isosurface_color.z = std::stof(args[++i]);
+        } else if (args[i] == "-ambient") {
+            light_params[0].intensity = std::stof(args[++i]);
+        } else if (args[i] == "-dir1") {
+            light_params[1].intensity = std::stof(args[++i]);
+            light_params[1].direction.x = std::stof(args[++i]);
+            light_params[1].direction.y = std::stof(args[++i]);
+            light_params[1].direction.z = std::stof(args[++i]);
+        } else if (args[i] == "-dir2") {
+            light_params[2].intensity = std::stof(args[++i]);
+            light_params[2].direction.x = std::stof(args[++i]);
+            light_params[2].direction.y = std::stof(args[++i]);
+            light_params[2].direction.z = std::stof(args[++i]);
         } else if (args[i] == "-h") {
             std::cout << USAGE << "\n";
             return;
@@ -324,15 +360,28 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     cpp::Instance instance(group);
     instance.commit();
 
+    std::vector<cpp::Light> lights;
     // create and setup an ambient light
-    cpp::Light ambient_light("ambient");
-    ambient_light.setParam("intensity", 0.3f);
-    ambient_light.commit();
-
-    cpp::Light directional_light("distant");
-    directional_light.setParam("direction", math::vec3f(0.5f, -1.f, 0.25f));
-    directional_light.commit();
-    std::vector<cpp::Light> lights = {ambient_light, directional_light};
+    {
+        cpp::Light light("ambient");
+        light.setParam("intensity", light_params[0].intensity);
+        light.commit();
+        lights.push_back(light);
+    }
+    {
+        cpp::Light light("distant");
+        light.setParam("intensity", light_params[1].intensity);
+        light.setParam("direction", light_params[1].direction);
+        light.commit();
+        lights.push_back(light);
+    }
+    {
+        cpp::Light light("distant");
+        light.setParam("intensity", light_params[2].intensity);
+        light.setParam("direction", light_params[2].direction);
+        light.commit();
+        lights.push_back(light);
+    }
 
     cpp::World world;
     world.setParam("instance", cpp::Data(instance));
@@ -385,6 +434,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     bool camera_changed = true;
     bool window_changed = false;
     bool take_screenshot = false;
+    bool lights_changed = false;
     while (!done) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
@@ -404,6 +454,16 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
                               << " " << up.x << " " << up.y << " " << up.z << "\n";
                 } else if (event.key.keysym.sym == SDLK_c) {
                     take_screenshot = true;
+                } else if (event.key.keysym.sym == SDLK_l) {
+                    std::cout << "-ambient " << light_params[0].intensity << " -dir1 "
+                              << light_params[1].intensity << " "
+                              << light_params[1].direction.x << " "
+                              << light_params[1].direction.y << " "
+                              << light_params[1].direction.z << " -dir2 "
+                              << light_params[2].intensity << " "
+                              << light_params[2].direction.x << " "
+                              << light_params[2].direction.y << " "
+                              << light_params[2].direction.z << "\n";
                 }
             }
             if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE &&
@@ -490,6 +550,37 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
                 pending_commits.push_back(tfn.handle());
                 pending_commits.push_back(brick.model.handle());
             }
+
+            for (size_t i = 0; i < lights.size(); ++i) {
+                ImGui::PushID(i);
+                ImGui::Separator();
+
+                if (i == 0) {
+                    ImGui::Text("Ambient Light");
+                } else {
+                    ImGui::Text("Directional Light");
+                }
+
+                if (ImGui::SliderFloat("Intensity", &light_params[i].intensity, 0.f, 10.f)) {
+                    lights[i].setParam("intensity", light_params[i].intensity);
+                    pending_commits.push_back(lights[i].handle());
+                    lights_changed = true;
+                }
+                if (i != 0) {
+                    if (ImGui::SliderFloat3(
+                            "Direction", &light_params[i].direction.x, -1.f, 1.f)) {
+                        lights[i].setParam("direction", light_params[i].direction);
+                        pending_commits.push_back(lights[i].handle());
+                        lights_changed = true;
+                    }
+                }
+                ImGui::PopID();
+            }
+            if (lights_changed) {
+                world.setParam("light", cpp::Data(lights));
+                pending_commits.push_back(world.handle());
+            }
+
             ImGui::End();
         }
 
@@ -568,6 +659,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
         SDL_GL_SwapWindow(window);
 
         camera_changed = false;
+        lights_changed = false;
     }
 }
 
