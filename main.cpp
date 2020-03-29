@@ -71,6 +71,10 @@ const std::string USAGE =
     "  -tfn <tfcn.png/jpg>      Load the saved RGBA transfer function from the provided image "
     "file\n"
     "\n"
+    "  -bg <r> <g> <b>          Set the desired background color (default white)\n"
+    "\n"
+    "  -iso-color <r> <g> <b>   Set the desired isosurface color (default light gray)\n"
+    "\n"
     "  -h                       Print this help.";
 
 int win_width = 1280;
@@ -169,6 +173,8 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     glm::vec3 cam_eye;
     glm::vec3 cam_at;
     glm::vec3 cam_up;
+    math::vec3f background_color(1.f);
+    math::vec3f isosurface_color(0.9f);
     std::vector<Colormap> cmdline_colormaps;
     for (size_t i = 1; i < args.size(); ++i) {
         if (args[i] == "-vr") {
@@ -199,6 +205,14 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
             std::vector<uint8_t> img_data(data, data + x * 4);
             stbi_image_free(data);
             cmdline_colormaps.emplace_back(tfn_name, img_data, LINEAR, true);
+        } else if (args[i] == "-bg") {
+            background_color.x = std::stof(args[++i]);
+            background_color.y = std::stof(args[++i]);
+            background_color.z = std::stof(args[++i]);
+        } else if (args[i] == "-iso-color") {
+            isosurface_color.x = std::stof(args[++i]);
+            isosurface_color.y = std::stof(args[++i]);
+            isosurface_color.z = std::stof(args[++i]);
         } else if (args[i] == "-h") {
             std::cout << USAGE << "\n";
             return;
@@ -281,6 +295,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     cpp::Renderer renderer(renderer_type);
     float sampling_rate = 1.f;
     renderer.setParam("volumeSamplingRate", sampling_rate);
+    renderer.setParam("backgroundColor", background_color);
     renderer.commit();
 
     brick.model.setParam("transferFunction", tfn);
@@ -294,7 +309,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
         auto geom = extract_isosurfaces(config, brick, isovalue);
         if (geom) {
             cpp::Material material(renderer_type, "obj");
-            material.setParam("kd", math::vec3f(0.9f));
+            material.setParam("kd", isosurface_color);
             material.commit();
 
             cpp::GeometricModel geom_model;
