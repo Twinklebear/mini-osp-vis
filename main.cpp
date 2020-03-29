@@ -13,6 +13,7 @@
 #include "imgui_impl_opengl3.h"
 #include "imgui_impl_sdl.h"
 #include "loader.h"
+#include "stb_image.h"
 #include "stb_image_write.h"
 #include "util/arcball_camera.h"
 #include "util/json.hpp"
@@ -59,8 +60,17 @@ const std::string USAGE =
 #endif
     "Options:\n"
     "  -iso <val>               Render an isosurface at the specified value\n"
+    "\n"
     "  -vr <lo> <hi>            Provide the value range for the volume to skip computing it\n"
+    "\n"
     "  -r (scivis|pathtracer)   Select the OSPRay renderer to use\n"
+    "\n"
+    "  -camera <eye_x> <eye_y> <eye_z> <at_x> <at_y> <at_z> <up_x> <up_y> <up_z>\n"
+    "                           Specify the camera position, orbit center and up vector\n"
+    "\n"
+    "  -tfn <tfcn.png/jpg>      Load the saved RGBA transfer function from the provided image "
+    "file\n"
+    "\n"
     "  -h                       Print this help.";
 
 int win_width = 1280;
@@ -155,6 +165,11 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     float isovalue = std::numeric_limits<float>::infinity();
     std::string renderer_type = "scivis";
     VolumeBrick brick;
+    bool cmdline_camera = false;
+    glm::vec3 cam_eye;
+    glm::vec3 cam_at;
+    glm::vec3 cam_up;
+    std::vector<Colormap> cmdline_colormaps;
     for (size_t i = 1; i < args.size(); ++i) {
         if (args[i] == "-vr") {
             value_range.x = std::stof(args[++i]);
@@ -163,6 +178,27 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
             isovalue = std::stof(args[++i]);
         } else if (args[i] == "-r") {
             renderer_type = args[++i];
+        } else if (args[i] == "-camera") {
+            cmdline_camera = true;
+            cam_eye.x = std::stof(args[++i]);
+            cam_eye.y = std::stof(args[++i]);
+            cam_eye.z = std::stof(args[++i]);
+
+            cam_at.x = std::stof(args[++i]);
+            cam_at.y = std::stof(args[++i]);
+            cam_at.z = std::stof(args[++i]);
+
+            cam_up.x = std::stof(args[++i]);
+            cam_up.y = std::stof(args[++i]);
+            cam_up.z = std::stof(args[++i]);
+        } else if (args[i] == "-tfn") {
+            const std::string tfn_file = args[++i];
+            const std::string tfn_name = get_file_basename(tfn_file);
+            int x, y, n;
+            uint8_t *data = stbi_load(tfn_file.c_str(), &x, &y, &n, 4);
+            std::vector<uint8_t> img_data(data, data + x * 4);
+            stbi_image_free(data);
+            cmdline_colormaps.emplace_back(tfn_name, img_data, LINEAR, true);
         } else if (args[i] == "-h") {
             std::cout << USAGE << "\n";
             return;
@@ -216,13 +252,19 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     math::vec2f ui_value_range = value_range;
 
     const float world_diagonal = math::length(brick.bounds.size());
-    const math::vec3f world_center = brick.bounds.center();
-    ArcballCamera arcball(
-        glm::vec3(world_center.x, world_center.y, world_center.z - world_diagonal * 1.5),
-        glm::vec3(world_center.x, world_center.y, world_center.z),
-        glm::vec3(0, 1, 0));
+    if (!cmdline_camera) {
+        const math::vec3f world_center = brick.bounds.center();
+        cam_eye =
+            glm::vec3(world_center.x, world_center.y, world_center.z - world_diagonal * 1.5);
+        cam_at = glm::vec3(world_center.x, world_center.y, world_center.z);
+        cam_up = glm::vec3(0.f, 1.f, 0.f);
+    }
+    ArcballCamera arcball(cam_eye, cam_at, cam_up);
 
     TransferFunctionWidget tfn_widget;
+    for (const auto &cmap : cmdline_colormaps) {
+        tfn_widget.add_colormap(cmap);
+    }
     std::vector<float> tfn_colors;
     std::vector<float> tfn_opacities;
     tfn_widget.get_colormapf(tfn_colors, tfn_opacities);
@@ -248,10 +290,11 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     group.setParam("volume", cpp::Data(brick.model));
 
     if (std::isfinite(isovalue)) {
+        std::cout << "isovalue: " << isovalue << "\n";
         auto geom = extract_isosurfaces(config, brick, isovalue);
         if (geom) {
             cpp::Material material(renderer_type, "obj");
-            material.setParam("Kd", math::vec3f(0.9f, 0.9f, 0.9f));
+            material.setParam("kd", math::vec3f(0.9f));
             material.commit();
 
             cpp::GeometricModel geom_model;
@@ -281,9 +324,9 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     world.setParam("light", cpp::Data(lights));
     world.commit();
 
-    glm::vec3 cam_eye = arcball.eye();
+    cam_eye = arcball.eye();
     glm::vec3 cam_dir = arcball.dir();
-    glm::vec3 cam_up = arcball.up();
+    cam_up = arcball.up();
 
     cpp::Camera camera("perspective");
     camera.setParam("aspect", static_cast<float>(win_width) / win_height);
@@ -341,9 +384,9 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
                     auto eye = arcball.eye();
                     auto dir = arcball.dir();
                     auto up = arcball.up();
-                    std::cout << "-eye " << eye.x << " " << eye.y << " " << eye.z << " -dir "
-                              << dir.x << " " << dir.y << " " << dir.z << " -up " << up.x
-                              << " " << up.y << " " << up.z << "\n";
+                    std::cout << "-camera " << eye.x << " " << eye.y << " " << eye.z << " "
+                              << eye.x + dir.x << " " << eye.y + dir.y << " " << eye.z + dir.z
+                              << " " << up.x << " " << up.y << " " << up.z << "\n";
                 } else if (event.key.keysym.sym == SDLK_c) {
                     take_screenshot = true;
                 }

@@ -13,10 +13,12 @@ struct Colormap {
     // An RGBA8 1D image
     std::vector<uint8_t> colormap;
     ColorSpace color_space;
+    bool use_opacity;
 
     Colormap(const std::string &name,
              const std::vector<uint8_t> &img,
-             const ColorSpace color_space);
+             const ColorSpace color_space,
+             const bool use_opacity);
 };
 
 class TransferFunctionWidget {

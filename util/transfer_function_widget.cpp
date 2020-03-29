@@ -33,8 +33,9 @@ inline float srgb_to_linear(const float x)
 
 Colormap::Colormap(const std::string &name,
                    const std::vector<uint8_t> &img,
-                   const ColorSpace color_space)
-    : name(name), colormap(img), color_space(color_space)
+                   const ColorSpace color_space,
+                   const bool use_opacity)
+    : name(name), colormap(img), color_space(color_space), use_opacity(use_opacity)
 {
 }
 
@@ -102,8 +103,8 @@ TransferFunctionWidget::TransferFunctionWidget()
 
 void TransferFunctionWidget::add_colormap(const Colormap &map)
 {
+    selected_colormap = colormaps.size();
     colormaps.push_back(map);
-
     if (colormaps.back().color_space == SRGB) {
         Colormap &cmap = colormaps.back();
         cmap.color_space = LINEAR;
@@ -114,6 +115,7 @@ void TransferFunctionWidget::add_colormap(const Colormap &map)
             }
         }
     }
+    update_colormap();
 }
 
 void TransferFunctionWidget::draw_ui()
@@ -309,20 +311,24 @@ void TransferFunctionWidget::update_colormap()
     colormap_changed = true;
     gpu_image_stale = true;
     current_colormap = colormaps[selected_colormap].colormap;
-    // We only change opacities for now, so go through and update the opacity
-    // by blending between the neighboring control points
-    auto a_it = alpha_control_pts.begin();
-    const size_t npixels = current_colormap.size() / 4;
-    for (size_t i = 0; i < npixels; ++i) {
-        float x = static_cast<float>(i) / npixels;
-        auto high = a_it + 1;
-        if (x > high->x) {
-            ++a_it;
-            ++high;
+
+    if (!colormaps[selected_colormap].use_opacity) {
+        // We only change opacities for now, so go through and update the opacity
+        // by blending between the neighboring control points
+        auto a_it = alpha_control_pts.begin();
+        const size_t npixels = current_colormap.size() / 4;
+        for (size_t i = 0; i < npixels; ++i) {
+            float x = static_cast<float>(i) / npixels;
+            auto high = a_it + 1;
+            if (x > high->x) {
+                ++a_it;
+                ++high;
+            }
+            float t = (x - a_it->x) / (high->x - a_it->x);
+            float alpha = (1.f - t) * a_it->y + t * high->y;
+            current_colormap[i * 4 + 3] =
+                static_cast<uint8_t>(clamp(alpha * 255.f, 0.f, 255.f));
         }
-        float t = (x - a_it->x) / (high->x - a_it->x);
-        float alpha = (1.f - t) * a_it->y + t * high->y;
-        current_colormap[i * 4 + 3] = static_cast<uint8_t>(clamp(alpha * 255.f, 0.f, 255.f));
     }
 }
 
@@ -334,7 +340,7 @@ void TransferFunctionWidget::load_embedded_preset(const uint8_t *buf,
     uint8_t *img_data = stbi_load_from_memory(buf, size, &w, &h, &n, 4);
     auto img = std::vector<uint8_t>(img_data, img_data + w * 1 * 4);
     stbi_image_free(img_data);
-    colormaps.emplace_back(name, img, SRGB);
+    colormaps.emplace_back(name, img, SRGB, false);
     Colormap &cmap = colormaps.back();
     for (size_t i = 0; i < cmap.colormap.size() / 4; ++i) {
         for (size_t j = 0; j < 3; ++j) {
