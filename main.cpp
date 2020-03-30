@@ -83,6 +83,8 @@ const std::string USAGE =
     "  -dir2 <intensity> <x> <y> <z>\n"
     "                           Set the second directional light intensity and direction\n"
     "\n"
+    "  -density-scale <x>       Set the volume density scaling\n"
+    "\n"
     "  -h                       Print this help.";
 
 int win_width = 1280;
@@ -200,6 +202,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
         LightParams(1.f, math::vec3f(0.5f, -1.f, 0.25f)),
         LightParams(1.f, math::vec3f(-0.5f, -0.5f, 0.5f))};
 
+    float density_scale = 1.f;
     for (size_t i = 1; i < args.size(); ++i) {
         if (args[i] == "-vr") {
             value_range.x = std::stof(args[++i]);
@@ -249,6 +252,8 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
             light_params[2].direction.x = std::stof(args[++i]);
             light_params[2].direction.y = std::stof(args[++i]);
             light_params[2].direction.z = std::stof(args[++i]);
+        } else if (args[i] == "-density-scale") {
+            density_scale = std::stof(args[++i]);
         } else if (args[i] == "-h") {
             std::cout << USAGE << "\n";
             return;
@@ -334,6 +339,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     renderer.setParam("backgroundColor", background_color);
     renderer.commit();
 
+    brick.model.setParam("densityScale", density_scale);
     brick.model.setParam("transferFunction", tfn);
     brick.model.commit();
 
@@ -535,7 +541,6 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
         ImGui::NewFrame();
 
         if (ImGui::Begin("Params")) {
-            static float density_scale = 1.f;
             if (ImGui::SliderFloat("Density Scale", &density_scale, 0.5f, 10.f)) {
                 brick.model.setParam("densityScale", density_scale);
                 pending_commits.push_back(brick.model.handle());
