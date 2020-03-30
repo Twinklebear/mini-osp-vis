@@ -85,6 +85,11 @@ const std::string USAGE =
     "\n"
     "  -density-scale <x>       Set the volume density scaling\n"
     "\n"
+    "  -nf <n>                  Set the number of frames to render before saving the image "
+    "and exiting\n"
+    "\n"
+    "  -o <name.jpg>            Set the output image filename\n"
+    "\n"
     "  -h                       Print this help.";
 
 int win_width = 1280;
@@ -202,6 +207,8 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
         LightParams(1.f, math::vec3f(0.5f, -1.f, 0.25f)),
         LightParams(1.f, math::vec3f(-0.5f, -0.5f, 0.5f))};
 
+    int render_frame_count = -1;
+    std::string output_image_file = "mini_scivis.jpg";
     float density_scale = 1.f;
     for (size_t i = 1; i < args.size(); ++i) {
         if (args[i] == "-vr") {
@@ -254,6 +261,10 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
             light_params[2].direction.z = std::stof(args[++i]);
         } else if (args[i] == "-density-scale") {
             density_scale = std::stof(args[++i]);
+        } else if (args[i] == "-nf") {
+            render_frame_count = std::stoi(args[++i]);
+        } else if (args[i] == "-o") {
+            output_image_file = args[++i];
         } else if (args[i] == "-h") {
             std::cout << USAGE << "\n";
             return;
@@ -434,6 +445,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     cpp::Future future = fb.renderFrame(renderer, camera, world);
     std::vector<OSPObject> pending_commits;
 
+    int frame_id = 0;
     ImGuiIO &io = ImGui::GetIO();
     glm::vec2 prev_mouse(-2.f);
     bool done = false;
@@ -608,7 +620,13 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
         ImGui::Render();
         glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
 
+        if (render_frame_count != -1 && frame_id == render_frame_count) {
+            take_screenshot = true;
+            done = true;
+        }
+
         if (future.isReady()) {
+            ++frame_id;
             if (!window_changed) {
                 uint32_t *img = (uint32_t *)fb.map(OSP_FB_COLOR);
                 glTexSubImage2D(GL_TEXTURE_2D,
@@ -623,8 +641,10 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
                 if (take_screenshot) {
                     take_screenshot = false;
                     stbi_flip_vertically_on_write(1);
-                    stbi_write_jpg("mini_scivis.jpg", win_width, win_height, 4, img, 90);
-                    std::cout << "Screenshot saved to 'mini_scivis.jpg'\n";
+                    stbi_write_jpg(
+                        output_image_file.c_str(), win_width, win_height, 4, img, 90);
+                    std::cout << "Screenshot saved to '" << output_image_file << "'"
+                              << std::endl;
                     stbi_flip_vertically_on_write(0);
                 }
                 fb.unmap(img);
