@@ -68,8 +68,11 @@ const std::string USAGE =
     "  -camera <eye_x> <eye_y> <eye_z> <at_x> <at_y> <at_z> <up_x> <up_y> <up_z>\n"
     "                           Specify the camera position, orbit center and up vector\n"
     "\n"
-    "  -tfn <tfcn.png/jpg>      Load the saved RGBA transfer function from the provided image "
-    "file\n"
+    "  -tfn [ignore_opacity] <tfcn.png/jpg>\n"
+    "                           Load the saved RGBA transfer function from the provided "
+    "image\n"
+    "                           file. If you optionally set ignore_opacity as the first arg\n"
+    "                           the opacity in the file will not be used\n"
     "\n"
     "  -bg <r> <g> <b>          Set the desired background color (default white)\n"
     "\n"
@@ -232,13 +235,18 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
             cam_up.y = std::stof(args[++i]);
             cam_up.z = std::stof(args[++i]);
         } else if (args[i] == "-tfn") {
+            bool use_opacity = true;
+            if (args[i + 1] == "ignore_opacity") {
+                use_opacity = false;
+                ++i;
+            }
             const std::string tfn_file = args[++i];
             const std::string tfn_name = get_file_basename(tfn_file);
             int x, y, n;
             uint8_t *data = stbi_load(tfn_file.c_str(), &x, &y, &n, 4);
             std::vector<uint8_t> img_data(data, data + x * 4);
             stbi_image_free(data);
-            cmdline_colormaps.emplace_back(tfn_name, img_data, LINEAR, true);
+            cmdline_colormaps.emplace_back(tfn_name, img_data, LINEAR, use_opacity);
         } else if (args[i] == "-bg") {
             background_color.x = std::stof(args[++i]);
             background_color.y = std::stof(args[++i]);
