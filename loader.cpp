@@ -251,6 +251,7 @@ cpp::Geometry extract_isosurfaces(const json &config, const VolumeBrick &brick, 
     isosurface = cpp::Geometry("isosurface");
     isosurface.setParam("isovalue", isovalue);
     isosurface.setParam("volume", brick.model);
+    isosurface.setParam("inheritVolumeOpacity", false);
     isosurface.commit();
 #endif
     return isosurface;

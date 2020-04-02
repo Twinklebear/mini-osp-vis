@@ -78,6 +78,8 @@ const std::string USAGE =
     "\n"
     "  -iso-color <r> <g> <b>   Set the desired isosurface color (default light gray)\n"
     "\n"
+    "  -iso-opacity <x>         Set the desired isosurface opacity (default opaque)\n"
+    "\n"
     "  -ambient <intensity>     Set the ambient light intensity\n"
     "\n"
     "  -dir1 <intensity> <x> <y> <z>\n"
@@ -204,6 +206,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     glm::vec3 cam_up;
     math::vec3f background_color(1.f);
     math::vec3f isosurface_color(0.9f);
+    float isosurface_opacity = 1.f;
     std::vector<Colormap> cmdline_colormaps;
     std::array<LightParams, 3> light_params = {
         LightParams(0.3f),
@@ -255,6 +258,8 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
             isosurface_color.x = std::stof(args[++i]);
             isosurface_color.y = std::stof(args[++i]);
             isosurface_color.z = std::stof(args[++i]);
+        } else if (args[i] == "-iso-opacity") {
+            isosurface_opacity = std::stof(args[++i]);
         } else if (args[i] == "-ambient") {
             light_params[0].intensity = std::stof(args[++i]);
         } else if (args[i] == "-dir1") {
@@ -371,6 +376,9 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
         if (geom) {
             cpp::Material material(renderer_type, "obj");
             material.setParam("kd", isosurface_color);
+            material.setParam("ks", 0.8f);
+            material.setParam("ns", 50.f);
+            material.setParam("d", isosurface_opacity);
             material.commit();
 
             cpp::GeometricModel geom_model;
@@ -561,7 +569,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
         ImGui::NewFrame();
 
         if (ImGui::Begin("Params")) {
-            if (ImGui::SliderFloat("Density Scale", &density_scale, 0.5f, 10.f)) {
+            if (ImGui::SliderFloat("Density Scale", &density_scale, 0.0f, 10.f)) {
                 brick.model.setParam("densityScale", density_scale);
                 pending_commits.push_back(brick.model.handle());
             }
