@@ -321,18 +321,21 @@ void TransferFunctionWidget::update_colormap()
     current_colormap = colormaps[selected_colormap].colormap;
     // We only change opacities for now, so go through and update the opacity
     // by blending between the neighboring control points
-    auto a_it = alpha_control_pts.begin();
-    const size_t npixels = current_colormap.size() / 4;
-    for (size_t i = 0; i < npixels; ++i) {
-        float x = static_cast<float>(i) / npixels;
-        auto high = a_it + 1;
-        if (x > high->x) {
-            ++a_it;
-            ++high;
+    if (!colormaps[selected_colormap].use_opacity) {
+        auto a_it = alpha_control_pts.begin();
+        const size_t npixels = current_colormap.size() / 4;
+        for (size_t i = 0; i < npixels; ++i) {
+            float x = static_cast<float>(i) / npixels;
+            auto high = a_it + 1;
+            if (x > high->x) {
+                ++a_it;
+                ++high;
+            }
+            float t = (x - a_it->x) / (high->x - a_it->x);
+            float alpha = (1.f - t) * a_it->y + t * high->y;
+            current_colormap[i * 4 + 3] =
+                static_cast<uint8_t>(clamp(alpha * 255.f, 0.f, 255.f));
         }
-        float t = (x - a_it->x) / (high->x - a_it->x);
-        float alpha = (1.f - t) * a_it->y + t * high->y;
-        current_colormap[i * 4 + 3] = static_cast<uint8_t>(clamp(alpha * 255.f, 0.f, 255.f));
     }
 }
 
