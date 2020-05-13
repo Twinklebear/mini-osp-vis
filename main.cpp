@@ -100,6 +100,57 @@ const std::string USAGE =
 int win_width = 1280;
 int win_height = 720;
 
+struct ClippingPlane {
+    int axis = 0;
+    bool flip_plane = false;
+    bool enabled = false;
+    math::vec3f position;
+
+    cpp::Geometry geom;
+    cpp::GeometricModel model;
+    cpp::Group group;
+    cpp::Instance instance;
+
+    ClippingPlane(int axis = 0, const math::vec3f &pos = math::vec3f(0.f))
+        : axis(axis), position(pos), geom("plane")
+    {
+        math::vec4f normal(0.f);
+        normal[axis] = 1.f;
+        geom.setParam("plane.coefficients", cpp::Data(normal));
+        geom.commit();
+
+        model = cpp::GeometricModel(geom);
+        model.commit();
+
+        group.setParam("clippingGeometry", cpp::Data(model));
+        group.commit();
+
+        instance = cpp::Instance(group);
+        const math::affine3f xfm =
+            math::affine3f::translate(math::vec3f(position.x, position.y, position.z));
+        instance.setParam("xfm", xfm);
+        instance.commit();
+    }
+
+    void flip_direction(bool flip_dir, std::vector<OSPObject> &pending_commits)
+    {
+        flip_plane = flip_dir;
+        model.setParam("invertNormals", flip_plane);
+        pending_commits.push_back(model.handle());
+        pending_commits.push_back(group.handle());
+        pending_commits.push_back(instance.handle());
+    }
+
+    void set_position(const float &pos, std::vector<OSPObject> &pending_commits)
+    {
+        position[axis] = pos;
+        const math::affine3f xfm =
+            math::affine3f::translate(math::vec3f(position.x, position.y, position.z));
+        instance.setParam("xfm", xfm);
+        pending_commits.push_back(instance.handle());
+    }
+};
+
 struct LightParams {
     float intensity = 0.5f;
     math::vec3f direction = math::vec3f(0.f);
@@ -197,7 +248,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     json config;
     std::string idx_file;
     math::vec2f value_range(std::numeric_limits<float>::infinity());
-    float isovalue = std::numeric_limits<float>::infinity();
+    std::vector<float> isovalues;
     std::string renderer_type = "scivis";
     VolumeBrick brick;
     bool cmdline_camera = false;
@@ -205,7 +256,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     glm::vec3 cam_at;
     glm::vec3 cam_up;
     math::vec3f background_color(1.f);
-    math::vec3f isosurface_color(0.9f);
+    std::vector<math::vec4f> isosurface_colors;
     float isosurface_opacity = 1.f;
     std::vector<Colormap> cmdline_colormaps;
     std::array<LightParams, 3> light_params = {
@@ -221,7 +272,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
             value_range.x = std::stof(args[++i]);
             value_range.y = std::stof(args[++i]);
         } else if (args[i] == "-iso") {
-            isovalue = std::stof(args[++i]);
+            isovalues.push_back(std::stof(args[++i]));
         } else if (args[i] == "-r") {
             renderer_type = args[++i];
         } else if (args[i] == "-camera") {
@@ -255,9 +306,11 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
             background_color.y = std::stof(args[++i]);
             background_color.z = std::stof(args[++i]);
         } else if (args[i] == "-iso-color") {
-            isosurface_color.x = std::stof(args[++i]);
-            isosurface_color.y = std::stof(args[++i]);
-            isosurface_color.z = std::stof(args[++i]);
+            math::vec4f c(1.f);
+            c.x = std::stof(args[++i]);
+            c.y = std::stof(args[++i]);
+            c.z = std::stof(args[++i]);
+            isosurface_colors.push_back(c);
         } else if (args[i] == "-iso-opacity") {
             isosurface_opacity = std::stof(args[++i]);
         } else if (args[i] == "-ambient") {
@@ -330,9 +383,10 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     }
     math::vec2f ui_value_range = value_range;
 
+    const math::vec3f world_center = brick.bounds.center();
+    const math::box3f world_bounds = brick.bounds;
     const float world_diagonal = math::length(brick.bounds.size());
     if (!cmdline_camera) {
-        const math::vec3f world_center = brick.bounds.center();
         cam_eye =
             glm::vec3(world_center.x, world_center.y, world_center.z - world_diagonal * 1.5);
         cam_at = glm::vec3(world_center.x, world_center.y, world_center.z);
@@ -370,12 +424,13 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     cpp::Group group;
     group.setParam("volume", cpp::Data(brick.model));
 
-    if (std::isfinite(isovalue)) {
-        std::cout << "isovalue: " << isovalue << "\n";
-        auto geom = extract_isosurfaces(config, brick, isovalue);
+    if (!isovalues.empty()) {
+        auto geom = extract_isosurfaces(config, brick, isovalues);
+        // TODO: need to do something different for the explicit extraction
+        // b/c we'll get multiple triangle meshes
         if (geom) {
             cpp::Material material(renderer_type, "obj");
-            material.setParam("kd", isosurface_color);
+            material.setParam("kd", math::vec4f(1.f));
             material.setParam("ks", 0.8f);
             material.setParam("ns", 50.f);
             material.setParam("d", isosurface_opacity);
@@ -384,6 +439,9 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
             cpp::GeometricModel geom_model;
             geom_model = cpp::GeometricModel(geom);
             geom_model.setParam("material", material);
+            if (!isosurface_colors.empty()) {
+                geom_model.setParam("color", cpp::Data(isosurface_colors));
+            }
             geom_model.commit();
             group.setParam("geometry", cpp::Data(geom_model));
         }
@@ -415,6 +473,10 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
         light.commit();
         lights.push_back(light);
     }
+
+    std::array<ClippingPlane, 3> clipping_planes = {ClippingPlane(0, world_center),
+                                                    ClippingPlane(1, world_center),
+                                                    ClippingPlane(2, world_center)};
 
     cpp::World world;
     world.setParam("instance", cpp::Data(instance));
@@ -469,6 +531,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     bool window_changed = false;
     bool take_screenshot = false;
     bool lights_changed = false;
+    bool clipping_changed = false;
     while (!done) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
@@ -614,6 +677,29 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
                 pending_commits.push_back(world.handle());
             }
 
+            for (size_t i = 0; i < clipping_planes.size(); ++i) {
+                ImGui::PushID(i);
+                ImGui::Separator();
+                auto &plane = clipping_planes[i];
+
+                ImGui::Text("Clipping Plane on axis %d", plane.axis);
+                clipping_changed |= ImGui::Checkbox("Enabled", &plane.enabled);
+                if (ImGui::Checkbox("Flip", &plane.flip_plane)) {
+                    plane.flip_direction(plane.flip_plane, pending_commits);
+                    clipping_changed = true;
+                }
+                if (ImGui::SliderFloat("Position",
+                                       &plane.position[plane.axis],
+                                       world_bounds.lower[plane.axis],
+                                       world_bounds.upper[plane.axis])) {
+                    plane.set_position(plane.position[plane.axis], pending_commits);
+                    clipping_changed = true;
+                }
+
+                ImGui::PopID();
+            }
+            ImGui::End();
+
             ImGui::End();
         }
 
@@ -679,6 +765,18 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
                 pending_commits.push_back(tfn.handle());
                 pending_commits.push_back(brick.model.handle());
             }
+
+            if (clipping_changed) {
+                std::vector<cpp::Instance> active_instances = {instance};
+                for (auto &p : clipping_planes) {
+                    if (p.enabled) {
+                        active_instances.push_back(p.instance);
+                    }
+                }
+                world.setParam("instance", cpp::Data(active_instances));
+                pending_commits.push_back(world.handle());
+            }
+            clipping_changed = false;
 
             if (!pending_commits.empty()) {
                 fb.clear();

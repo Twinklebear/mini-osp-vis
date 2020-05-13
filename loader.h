@@ -28,5 +28,5 @@ VolumeBrick load_idx_volume(const std::string &idx_file, json &config);
 
 cpp::Geometry extract_isosurfaces(const json &config,
                                   const VolumeBrick &brick,
-                                  float isovalue);
+                                  const std::vector<float> &isovalues);
 

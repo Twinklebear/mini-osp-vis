@@ -173,7 +173,9 @@ VolumeBrick load_idx_volume(const std::string &idx_file, json &config)
     return brick;
 }
 
-cpp::Geometry extract_isosurfaces(const json &config, const VolumeBrick &brick, float isovalue)
+cpp::Geometry extract_isosurfaces(const json &config,
+                                  const VolumeBrick &brick,
+                                  const std::vector<float> &isovalues)
 {
     cpp::Geometry isosurface;
 #ifdef USE_EXPLICIT_ISOSURFACE
@@ -215,7 +217,8 @@ cpp::Geometry extract_isosurfaces(const json &config, const VolumeBrick &brick, 
     vtkSmartPointer<vtkFlyingEdges3D> fedges = vtkSmartPointer<vtkFlyingEdges3D>::New();
     fedges->SetInputData(img_data);
     fedges->SetNumberOfContours(1);
-    fedges->SetValue(0, isovalue);
+    // TODO: Multiple isosurface geometries
+    fedges->SetValue(0, isovalues[0]);
     fedges->SetComputeNormals(false);
     fedges->Update();
     vtkPolyData *isosurf = fedges->GetOutput();
@@ -249,9 +252,8 @@ cpp::Geometry extract_isosurfaces(const json &config, const VolumeBrick &brick, 
     }
 #else
     isosurface = cpp::Geometry("isosurface");
-    isosurface.setParam("isovalue", isovalue);
-    isosurface.setParam("volume", brick.model);
-    isosurface.setParam("inheritVolumeOpacity", false);
+    isosurface.setParam("isovalue", cpp::Data(isovalues));
+    isosurface.setParam("volume", brick.brick);
     isosurface.commit();
 #endif
     return isosurface;
