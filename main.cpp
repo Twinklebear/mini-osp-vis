@@ -425,25 +425,34 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     group.setParam("volume", cpp::Data(brick.model));
 
     if (!isovalues.empty()) {
-        auto geom = extract_isosurfaces(config, brick, isovalues);
-        // TODO: need to do something different for the explicit extraction
-        // b/c we'll get multiple triangle meshes
-        if (geom) {
-            cpp::Material material(renderer_type, "obj");
-            material.setParam("kd", math::vec4f(1.f));
-            material.setParam("ks", 0.8f);
-            material.setParam("ns", 50.f);
-            material.setParam("d", isosurface_opacity);
-            material.commit();
+        cpp::Material material(renderer_type, "obj");
+        material.setParam("kd", math::vec3f(1.f));
+        material.setParam("ks", math::vec3f(0.8f));
+        material.setParam("ns", 50.f);
+        material.setParam("d", isosurface_opacity);
+        material.commit();
 
+        auto geom = extract_isosurfaces(config, brick, isovalues);
+        std::vector<cpp::GeometricModel> geom_models;
+        // If using VTK for multiple isosurfaces we'll get a bunch of triangle meshes, one
+        // per-isovalue
+        for (size_t i = 0; i < geom.size(); ++i) {
+            const auto &g = geom[i];
             cpp::GeometricModel geom_model;
-            geom_model = cpp::GeometricModel(geom);
+            geom_model = cpp::GeometricModel(g);
             geom_model.setParam("material", material);
             if (!isosurface_colors.empty()) {
-                geom_model.setParam("color", cpp::Data(isosurface_colors));
+                if (geom.size() > 1) {
+                    geom_model.setParam("color", cpp::Data(isosurface_colors[i]));
+                } else {
+                    geom_model.setParam("color", cpp::Data(isosurface_colors));
+                }
             }
             geom_model.commit();
-            group.setParam("geometry", cpp::Data(geom_model));
+            geom_models.push_back(geom_model);
+        }
+        if (!geom_models.empty()) {
+            group.setParam("geometry", cpp::Data(geom_models));
         }
     }
     group.commit();

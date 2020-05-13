@@ -173,11 +173,11 @@ VolumeBrick load_idx_volume(const std::string &idx_file, json &config)
     return brick;
 }
 
-cpp::Geometry extract_isosurfaces(const json &config,
-                                  const VolumeBrick &brick,
-                                  const std::vector<float> &isovalues)
+std::vector<cpp::Geometry> extract_isosurfaces(const json &config,
+                                               const VolumeBrick &brick,
+                                               const std::vector<float> &isovalues)
 {
-    cpp::Geometry isosurface;
+    std::vector<cpp::Geometry> isosurfaces;
 #ifdef USE_EXPLICIT_ISOSURFACE
     const std::string voxel_type_string = config["type"].get<std::string>();
     vtkSmartPointer<vtkDataArray> data_array = nullptr;
@@ -214,48 +214,51 @@ cpp::Geometry extract_isosurfaces(const json &config,
     img_data->SetOrigin(brick.bounds.lower.x, brick.bounds.lower.y, brick.bounds.lower.z);
     img_data->GetPointData()->SetScalars(data_array);
 
-    vtkSmartPointer<vtkFlyingEdges3D> fedges = vtkSmartPointer<vtkFlyingEdges3D>::New();
-    fedges->SetInputData(img_data);
-    fedges->SetNumberOfContours(1);
-    // TODO: Multiple isosurface geometries
-    fedges->SetValue(0, isovalues[0]);
-    fedges->SetComputeNormals(false);
-    fedges->Update();
-    vtkPolyData *isosurf = fedges->GetOutput();
+    for (const auto &v : isovalues) {
+        vtkSmartPointer<vtkFlyingEdges3D> fedges = vtkSmartPointer<vtkFlyingEdges3D>::New();
+        fedges->SetInputData(img_data);
+        fedges->SetNumberOfContours(1);
+        fedges->SetValue(0, v);
+        fedges->SetComputeNormals(false);
+        fedges->Update();
+        vtkPolyData *isosurf = fedges->GetOutput();
 
-    std::vector<math::vec3f> vertices;
-    std::vector<math::vec3ui> indices;
-    vertices.reserve(isosurf->GetNumberOfCells());
-    indices.reserve(isosurf->GetNumberOfCells());
-    for (size_t i = 0; i < isosurf->GetNumberOfCells(); ++i) {
-        vtkTriangle *tri = dynamic_cast<vtkTriangle *>(isosurf->GetCell(i));
-        if (tri->ComputeArea() == 0.0) {
-            continue;
+        std::vector<math::vec3f> vertices;
+        std::vector<math::vec3ui> indices;
+        vertices.reserve(isosurf->GetNumberOfCells());
+        indices.reserve(isosurf->GetNumberOfCells());
+        for (size_t i = 0; i < isosurf->GetNumberOfCells(); ++i) {
+            vtkTriangle *tri = dynamic_cast<vtkTriangle *>(isosurf->GetCell(i));
+            if (tri->ComputeArea() == 0.0) {
+                continue;
+            }
+            math::vec3ui tids;
+            for (size_t v = 0; v < 3; ++v) {
+                const double *pt = isosurf->GetPoint(tri->GetPointId(v));
+                const math::vec3f vert(pt[0], pt[1], pt[2]);
+                tids[v] = vertices.size();
+                vertices.push_back(vert);
+            }
+            indices.push_back(tids);
         }
-        math::vec3ui tids;
-        for (size_t v = 0; v < 3; ++v) {
-            const double *pt = isosurf->GetPoint(tri->GetPointId(v));
-            const math::vec3f vert(pt[0], pt[1], pt[2]);
-            tids[v] = vertices.size();
-            vertices.push_back(vert);
+        if (!indices.empty()) {
+            std::cout << "Isosurface has " << indices.size() << " triangles\n";
+            cpp::Geometry isosurface("mesh");
+            isosurface.setParam("vertex.position", cpp::Data(vertices));
+            isosurface.setParam("index", cpp::Data(indices));
+            isosurface.commit();
+            isosurfaces.push_back(isosurface);
+        } else {
+            std::cout << "Isosurface at " << v << " is empty\n";
         }
-        indices.push_back(tids);
-    }
-    if (!indices.empty()) {
-        std::cout << "Isosurface has " << indices.size() << " triangles\n";
-        isosurface = cpp::Geometry("mesh");
-        isosurface.setParam("vertex.position", cpp::Data(vertices));
-        isosurface.setParam("index", cpp::Data(indices));
-        isosurface.commit();
-    } else {
-        std::cout << "Isosurface at " << isovalue << " is empty\n";
     }
 #else
-    isosurface = cpp::Geometry("isosurface");
+    cpp::Geometry isosurface("isosurface");
     isosurface.setParam("isovalue", cpp::Data(isovalues));
     isosurface.setParam("volume", brick.brick);
     isosurface.commit();
+    isosurfaces.push_back(isosurface);
 #endif
-    return isosurface;
+    return isosurfaces;
 }
 
