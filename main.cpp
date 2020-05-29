@@ -8,7 +8,7 @@
 #include <ospray/ospray.h>
 #include <ospray/ospray_cpp.h>
 #include "arcball_camera.h"
-#include "gl_core_4_5.h"
+#include "glad/glad.h"
 #include "imgui/imgui.h"
 #include "imgui_impl_opengl3.h"
 #include "imgui_impl_sdl.h"
@@ -206,7 +206,7 @@ int main(int argc, const char **argv)
     SDL_GL_SetSwapInterval(1);
     SDL_GL_MakeCurrent(window, gl_context);
 
-    if (ogl_LoadFunctions() == ogl_LOAD_FAILED) {
+    if (!gladLoadGL()) {
         std::cerr << "Failed to initialize OpenGL\n";
         return 1;
     }
@@ -514,7 +514,15 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     GLuint render_texture;
     glGenTextures(1, &render_texture);
     glBindTexture(GL_TEXTURE_2D, render_texture);
-    glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, win_width, win_height);
+    glTexImage2D(GL_TEXTURE_2D,
+                 0,
+                 GL_RGBA8,
+                 win_width,
+                 win_height,
+                 0,
+                 GL_RGBA,
+                 GL_UNSIGNED_BYTE,
+                 nullptr);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -522,7 +530,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
     GLuint vao;
-    glCreateVertexArrays(1, &vao);
+    glGenVertexArrays(1, &vao);
     glBindVertexArray(vao);
 
     glClearColor(0.0, 0.0, 0.0, 0.0);
@@ -616,7 +624,15 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
                 glGenTextures(1, &render_texture);
                 // Setup the render textures for color and normals
                 glBindTexture(GL_TEXTURE_2D, render_texture);
-                glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, win_width, win_height);
+                glTexImage2D(GL_TEXTURE_2D,
+                             0,
+                             GL_RGBA8,
+                             win_width,
+                             win_height,
+                             0,
+                             GL_RGBA,
+                             GL_UNSIGNED_BYTE,
+                             nullptr);
 
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -707,8 +723,6 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
 
                 ImGui::PopID();
             }
-            ImGui::End();
-
             ImGui::End();
         }
 

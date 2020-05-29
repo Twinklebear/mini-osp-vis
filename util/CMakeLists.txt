@@ -2,7 +2,7 @@ add_library(util
     util.cpp
     arcball_camera.cpp
     shader.cpp
-    gl_core_4_5.c
+    glad/src/glad.c
     transfer_function_widget.cpp)
 
 set_target_properties(util PROPERTIES
@@ -20,6 +20,7 @@ target_link_libraries(util PUBLIC
 
 target_include_directories(util PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}
+    ${CMAKE_CURRENT_LIST_DIR}/glad/include/
 	$<BUILD_INTERFACE:${SDL2_INCLUDE_DIR}>
 	$<BUILD_INTERFACE:${OPENGL_INCLUDE_DIR}>)
 

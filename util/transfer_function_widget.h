@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
-#include "gl_core_4_5.h"
+#include "glad/glad.h"
 #include "imgui.h"
 
 enum ColorSpace { LINEAR, SRGB };

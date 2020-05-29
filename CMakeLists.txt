@@ -9,7 +9,6 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
 find_package(SDL2 REQUIRED)
 find_package(OpenGL REQUIRED)
-find_package(Threads REQUIRED)
 find_package(ospray 2.0 REQUIRED)
 find_package(rkcommon REQUIRED)
 find_package(TBB REQUIRED)
