@@ -2,12 +2,12 @@
 
 #include <string>
 #include <vector>
-#include <ospcommon/math/vec.h>
+#include <rkcommon/math/vec.h>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_reduce.h>
 #include "json.hpp"
 
-using namespace ospcommon;
+using namespace rkcommon;
 using json = nlohmann::json;
 
 // Read the contents of a file into the string

@@ -22,7 +22,7 @@
 #include "util/util.h"
 
 using namespace ospray;
-using namespace ospcommon;
+using namespace rkcommon;
 using json = nlohmann::json;
 
 const std::string fullscreen_quad_vs = R"(

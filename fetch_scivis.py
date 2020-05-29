@@ -4,17 +4,34 @@ import os
 import sys
 import requests
 import json
+from urllib.parse import urlparse
+from argparse import ArgumentParser
 
-if len(sys.argv) != 2:
-    print("Usage: ./fetch_scivis.py <dataset name>")
-    print("The dataset name should be all lowercase and without spaces to match the website")
-    sys.exit(1)
+sizeof = {'uint8' : 1, 'uint16' : 2, 'int16' : 2, 'float32' : 4, 'float64' : 8} # bytes
 
-r = requests.get("http://sci.utah.edu/~klacansky/cdn/open-scivis-datasets/{}/{}.json".format(sys.argv[1], sys.argv[1]))
-meta = r.json()
+parser = ArgumentParser(description='Fetch a scientific visualization dataset')
+group  = parser.add_mutually_exclusive_group()
+group.add_argument('-l', '--list', dest='do_list', action='store_true', help='List available datasets')
+group.add_argument('-d', '--dataset', type=str, help='Name of the dataset to fetch')
+args = parser.parse_args()
+
+r = requests.get("https://klacansky.com/open-scivis-datasets/data_sets.json")
+index = r.json()
+
+if args.do_list:
+  print('Available datasets:')
+  for x in index:
+    name = x['name'].lower().replace(' ', '_')
+    dims = [int(d) for d in x['size']]
+    size = dims[0] * dims[1] * dims[2] * sizeof[x['type']] / 1048576
+    print(f'  {name}', end=' ')
+    print(f'({size/1024:.0f} GB)' if size > 1024 else f'({size:.0f} MB)' if size > 1 else '(<1 MB)')
+  sys.exit(0)
+
+meta = [x for x in index if x["name"].lower().replace(' ', '_') == args.dataset][0]
 print(json.dumps(meta, indent=4))
 
-with open(sys.argv[1] + ".json", "w") as f:
+with open(args.dataset + ".json", "w") as f:
     f.write(json.dumps(meta, indent=4))
 
 volume_file = os.path.basename(meta["url"])

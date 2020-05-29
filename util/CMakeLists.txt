@@ -11,7 +11,7 @@ set_target_properties(util PROPERTIES
 
 target_link_libraries(util PUBLIC
     ospray::ospray
-    ospcommon::ospcommon
+    rkcommon::rkcommon
     TBB::tbb
     imgui
     glm::glm

@@ -11,7 +11,7 @@ find_package(SDL2 REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(Threads REQUIRED)
 find_package(ospray 2.0 REQUIRED)
-find_package(ospcommon REQUIRED)
+find_package(rkcommon REQUIRED)
 find_package(TBB REQUIRED)
 find_package(glm REQUIRED)
 find_package(OpenVisus)
@@ -40,7 +40,7 @@ target_include_directories(mini_scivis PUBLIC
 
 target_link_libraries(mini_scivis PUBLIC
     ospray::ospray
-    ospcommon::ospcommon
+    rkcommon::rkcommon
     TBB::tbb
     util
     imgui

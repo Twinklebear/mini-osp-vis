@@ -11,7 +11,7 @@
 #include <glm/glm.hpp>
 
 using namespace ospray;
-using namespace ospcommon;
+using namespace rkcommon;
 using json = nlohmann::json;
 
 struct VolumeBrick {
