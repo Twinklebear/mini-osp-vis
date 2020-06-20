@@ -723,8 +723,8 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
 
                 ImGui::PopID();
             }
-            ImGui::End();
         }
+        ImGui::End();
 
         if (ImGui::Begin("Transfer Function")) {
             if (ImGui::Button("Save Transfer Function")) {
@@ -738,8 +738,8 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
                 std::cout << "Transfer function saved to 'transfer_function.png'\n";
             }
             tfn_widget.draw_ui();
-            ImGui::End();
         }
+        ImGui::End();
 
         // Rendering
         ImGui::Render();
