@@ -116,13 +116,13 @@ struct ClippingPlane {
     {
         math::vec4f normal(0.f);
         normal[axis] = 1.f;
-        geom.setParam("plane.coefficients", cpp::Data(normal));
+        geom.setParam("plane.coefficients", cpp::CopiedData(normal));
         geom.commit();
 
         model = cpp::GeometricModel(geom);
         model.commit();
 
-        group.setParam("clippingGeometry", cpp::Data(model));
+        group.setParam("clippingGeometry", cpp::CopiedData(model));
         group.commit();
 
         instance = cpp::Instance(group);
@@ -403,11 +403,10 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     tfn_widget.get_colormapf(tfn_colors, tfn_opacities);
 
     cpp::TransferFunction tfn("piecewiseLinear");
-    tfn.setParam(
-        "color",
-        cpp::Data(
-            tfn_colors.size() / 3, reinterpret_cast<math::vec3f *>(tfn_colors.data()), true));
-    tfn.setParam("opacity", cpp::Data(tfn_opacities.size(), tfn_opacities.data(), true));
+    tfn.setParam("color",
+                 cpp::SharedData(reinterpret_cast<math::vec3f *>(tfn_colors.data()),
+                                 tfn_colors.size() / 3));
+    tfn.setParam("opacity", cpp::SharedData(tfn_opacities.data(), tfn_opacities.size()));
     tfn.setParam("valueRange", ui_value_range);
     tfn.commit();
 
@@ -422,7 +421,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     brick.model.commit();
 
     cpp::Group group;
-    group.setParam("volume", cpp::Data(brick.model));
+    group.setParam("volume", cpp::CopiedData(brick.model));
 
     if (!isovalues.empty()) {
         cpp::Material material(renderer_type, "obj");
@@ -443,16 +442,16 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
             geom_model.setParam("material", material);
             if (!isosurface_colors.empty()) {
                 if (geom.size() > 1) {
-                    geom_model.setParam("color", cpp::Data(isosurface_colors[i]));
+                    geom_model.setParam("color", cpp::CopiedData(isosurface_colors[i]));
                 } else {
-                    geom_model.setParam("color", cpp::Data(isosurface_colors));
+                    geom_model.setParam("color", cpp::CopiedData(isosurface_colors));
                 }
             }
             geom_model.commit();
             geom_models.push_back(geom_model);
         }
         if (!geom_models.empty()) {
-            group.setParam("geometry", cpp::Data(geom_models));
+            group.setParam("geometry", cpp::CopiedData(geom_models));
         }
     }
     group.commit();
@@ -488,8 +487,8 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
                                                     ClippingPlane(2, world_center)};
 
     cpp::World world;
-    world.setParam("instance", cpp::Data(instance));
-    world.setParam("light", cpp::Data(lights));
+    world.setParam("instance", cpp::CopiedData(instance));
+    world.setParam("light", cpp::CopiedData(lights));
     world.commit();
 
     cam_eye = arcball.eye();
@@ -504,8 +503,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     camera.setParam("fovy", 40.f);
     camera.commit();
 
-    cpp::FrameBuffer fb(
-        math::vec2i(win_width, win_height), OSP_FB_SRGBA, OSP_FB_COLOR | OSP_FB_ACCUM);
+    cpp::FrameBuffer fb(win_width, win_height, OSP_FB_SRGBA, OSP_FB_COLOR | OSP_FB_ACCUM);
     fb.clear();
 
     Shader display_render(fullscreen_quad_vs, display_texture_fs);
@@ -615,7 +613,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
                 pending_commits.push_back(camera.handle());
 
                 // make new framebuffer
-                fb = cpp::FrameBuffer(math::vec2i(win_width, win_height),
+                fb = cpp::FrameBuffer(win_width, win_height,
                                       OSP_FB_SRGBA,
                                       OSP_FB_COLOR | OSP_FB_ACCUM);
                 fb.clear();
@@ -698,7 +696,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
                 ImGui::PopID();
             }
             if (lights_changed) {
-                world.setParam("light", cpp::Data(lights));
+                world.setParam("light", cpp::CopiedData(lights));
                 pending_commits.push_back(world.handle());
             }
 
@@ -778,12 +776,12 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
 
             if (tfn_widget.changed()) {
                 tfn_widget.get_colormapf(tfn_colors, tfn_opacities);
-                tfn.setParam("color",
-                             cpp::Data(tfn_colors.size() / 3,
-                                       reinterpret_cast<math::vec3f *>(tfn_colors.data()),
-                                       true));
+                tfn.setParam(
+                    "color",
+                    cpp::SharedData(reinterpret_cast<math::vec3f *>(tfn_colors.data()),
+                                    tfn_colors.size() / 3));
                 tfn.setParam("opacity",
-                             cpp::Data(tfn_opacities.size(), tfn_opacities.data(), true));
+                             cpp::SharedData(tfn_opacities.data(), tfn_opacities.size()));
                 tfn.setParam("valueRange", ui_value_range);
                 pending_commits.push_back(tfn.handle());
                 pending_commits.push_back(brick.model.handle());
@@ -796,7 +794,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
                         active_instances.push_back(p.instance);
                     }
                 }
-                world.setParam("instance", cpp::Data(active_instances));
+                world.setParam("instance", cpp::CopiedData(active_instances));
                 pending_commits.push_back(world.handle());
             }
             clipping_changed = false;

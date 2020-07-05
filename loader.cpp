@@ -66,21 +66,18 @@ VolumeBrick load_raw_volume(const json &config)
         throw std::runtime_error("Failed to read volume " + volume_file);
     }
 
-    cpp::Data osp_data;
+    cpp::SharedData osp_data;
     if (voxel_type_string == "uint8") {
-        osp_data = cpp::Data(math::vec3ul(brick.dims), brick.voxel_data->data(), true);
+        osp_data = cpp::SharedData(brick.voxel_data->data(), math::vec3ul(brick.dims));
     } else if (voxel_type_string == "uint16") {
-        osp_data = cpp::Data(math::vec3ul(brick.dims),
-                             reinterpret_cast<uint16_t *>(brick.voxel_data->data()),
-                             true);
+        osp_data = cpp::SharedData(reinterpret_cast<uint16_t *>(brick.voxel_data->data()),
+                                   math::vec3ul(brick.dims));
     } else if (voxel_type_string == "float32") {
-        osp_data = cpp::Data(math::vec3ul(brick.dims),
-                             reinterpret_cast<float *>(brick.voxel_data->data()),
-                             true);
+        osp_data = cpp::SharedData(reinterpret_cast<float *>(brick.voxel_data->data()),
+                                   math::vec3ul(brick.dims));
     } else if (voxel_type_string == "float64") {
-        osp_data = cpp::Data(math::vec3ul(brick.dims),
-                             reinterpret_cast<double *>(brick.voxel_data->data()),
-                             true);
+        osp_data = cpp::SharedData(reinterpret_cast<double *>(brick.voxel_data->data()),
+                                   math::vec3ul(brick.dims));
     }
     brick.brick.setParam("data", osp_data);
     brick.brick.commit();
@@ -146,21 +143,18 @@ VolumeBrick load_idx_volume(const std::string &idx_file, json &config)
     brick.voxel_data = std::make_shared<std::vector<uint8_t>>(n_voxels * voxel_size, 0);
     std::memcpy(brick.voxel_data->data(), query->buffer.c_ptr(), brick.voxel_data->size());
 
-    cpp::Data osp_data;
+    cpp::SharedData osp_data;
     if (voxel_type == "uint8") {
-        osp_data = cpp::Data(math::vec3ul(brick.dims), brick.voxel_data->data(), true);
+        osp_data = cpp::SharedData(brick.voxel_data->data(), math::vec3ul(brick.dims));
     } else if (voxel_type == "uint16") {
-        osp_data = cpp::Data(math::vec3ul(brick.dims),
-                             reinterpret_cast<uint16_t *>(brick.voxel_data->data()),
-                             true);
+        osp_data = cpp::SharedData(reinterpret_cast<uint16_t *>(brick.voxel_data->data()),
+                                   math::vec3ul(brick.dims));
     } else if (voxel_type == "float32") {
-        osp_data = cpp::Data(math::vec3ul(brick.dims),
-                             reinterpret_cast<float *>(brick.voxel_data->data()),
-                             true);
+        osp_data = cpp::SharedData(reinterpret_cast<float *>(brick.voxel_data->data()),
+                                   math::vec3ul(brick.dims));
     } else if (voxel_type == "float64") {
-        osp_data = cpp::Data(math::vec3ul(brick.dims),
-                             reinterpret_cast<double *>(brick.voxel_data->data()),
-                             true);
+        osp_data = cpp::SharedData(reinterpret_cast<double *>(brick.voxel_data->data()),
+                                   math::vec3ul(brick.dims));
     }
     brick.brick.setParam("data", osp_data);
     brick.brick.commit();
@@ -244,8 +238,8 @@ std::vector<cpp::Geometry> extract_isosurfaces(const json &config,
         if (!indices.empty()) {
             std::cout << "Isosurface has " << indices.size() << " triangles\n";
             cpp::Geometry isosurface("mesh");
-            isosurface.setParam("vertex.position", cpp::Data(vertices));
-            isosurface.setParam("index", cpp::Data(indices));
+            isosurface.setParam("vertex.position", cpp::CopiedData(vertices));
+            isosurface.setParam("index", cpp::CopiedData(indices));
             isosurface.commit();
             isosurfaces.push_back(isosurface);
         } else {
@@ -254,7 +248,7 @@ std::vector<cpp::Geometry> extract_isosurfaces(const json &config,
     }
 #else
     cpp::Geometry isosurface("isosurface");
-    isosurface.setParam("isovalue", cpp::Data(isovalues));
+    isosurface.setParam("isovalue", cpp::CopiedData(isovalues));
     isosurface.setParam("volume", brick.brick);
     isosurface.commit();
     isosurfaces.push_back(isosurface);

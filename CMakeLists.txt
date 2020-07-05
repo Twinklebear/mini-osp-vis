@@ -48,8 +48,8 @@ target_link_libraries(mini_scivis PUBLIC
 
 target_compile_definitions(mini_scivis PUBLIC
     -DNOMINMAX
-    -DSDL_MAIN_HANDLED)
-
+    -DSDL_MAIN_HANDLED
+    -DOSPRAY_CPP_RKCOMMON_TYPES)
 
 if ("${VTK_FOUND}" AND USE_EXPLICIT_ISOSURFACE)
     target_compile_definitions(mini_scivis PUBLIC
