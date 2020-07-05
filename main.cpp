@@ -606,7 +606,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
                     }
                     prev_mouse = cur_mouse;
                 } else if (event.type == SDL_MOUSEWHEEL) {
-                    arcball.zoom(event.wheel.y * world_diagonal / 100.f);
+                    arcball.zoom(event.wheel.y / 10.f);
                     camera_changed = true;
                 }
             }
