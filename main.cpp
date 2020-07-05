@@ -65,8 +65,8 @@ const std::string USAGE =
     "\n"
     "  -r (scivis|pathtracer)   Select the OSPRay renderer to use\n"
     "\n"
-    "  -camera <eye_x> <eye_y> <eye_z> <at_x> <at_y> <at_z> <up_x> <up_y> <up_z>\n"
-    "                           Specify the camera position, orbit center and up vector\n"
+    "  -camera <eye_x> <eye_y> <eye_z> <dir_x> <dir_y> <dir_z> <up_x> <up_y> <up_z>\n"
+    "                           Specify the camera position, view dir and up vector\n"
     "\n"
     "  -tfn [ignore_opacity] <tfcn.png/jpg>\n"
     "                           Load the saved RGBA transfer function from the provided "
@@ -285,6 +285,8 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
             cam_at.y = std::stof(args[++i]);
             cam_at.z = std::stof(args[++i]);
 
+            cam_at = cam_eye + cam_at;
+
             cam_up.x = std::stof(args[++i]);
             cam_up.y = std::stof(args[++i]);
             cam_up.z = std::stof(args[++i]);
@@ -387,9 +389,9 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     const math::box3f world_bounds = brick.bounds;
     const float world_diagonal = math::length(brick.bounds.size());
     if (!cmdline_camera) {
-        cam_eye =
-            glm::vec3(world_center.x, world_center.y, world_center.z - world_diagonal * 1.5);
-        cam_at = glm::vec3(world_center.x, world_center.y, world_center.z);
+        cam_eye = glm::vec3(0.5, 0.5, -1.0);
+        // glm::vec3(world_center.x, world_center.y, world_center.z - world_diagonal * 1.5);
+        cam_at = glm::vec3(0.5, 0.5, 0.5);
         cam_up = glm::vec3(0.f, 1.f, 0.f);
     }
     ArcballCamera arcball(cam_eye, cam_at, cam_up);
@@ -457,6 +459,13 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     group.commit();
 
     cpp::Instance instance(group);
+    const math::vec3f spacing = get_vec<float, 3>(config["spacing"]);
+    const math::vec3f volume_dims = get_vec<int, 3>(config["size"]);
+
+    auto transform = math::affine3f::scale(spacing) * math::affine3f::translate(math::vec3f(-0.5f)) *
+                     math::affine3f::scale(math::vec3f(1.f) / volume_dims);
+    instance.setParam("xfm", transform);
+
     instance.commit();
 
     std::vector<cpp::Light> lights;
@@ -500,7 +509,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     camera.setParam("position", math::vec3f(cam_eye.x, cam_eye.y, cam_eye.z));
     camera.setParam("direction", math::vec3f(cam_dir.x, cam_dir.y, cam_dir.z));
     camera.setParam("up", math::vec3f(cam_up.x, cam_up.y, cam_up.z));
-    camera.setParam("fovy", 40.f);
+    camera.setParam("fovy", 50.f);
     camera.commit();
 
     cpp::FrameBuffer fb(win_width, win_height, OSP_FB_SRGBA, OSP_FB_COLOR | OSP_FB_ACCUM);
@@ -613,9 +622,8 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
                 pending_commits.push_back(camera.handle());
 
                 // make new framebuffer
-                fb = cpp::FrameBuffer(win_width, win_height,
-                                      OSP_FB_SRGBA,
-                                      OSP_FB_COLOR | OSP_FB_ACCUM);
+                fb = cpp::FrameBuffer(
+                    win_width, win_height, OSP_FB_SRGBA, OSP_FB_COLOR | OSP_FB_ACCUM);
                 fb.clear();
 
                 glDeleteTextures(1, &render_texture);

@@ -31,13 +31,11 @@ VolumeBrick load_raw_volume(const json &config)
     VolumeBrick brick;
 
     const std::string volume_file = config["volume"].get<std::string>();
-    const math::vec3f grid_spacing = get_vec<float, 3>(config["spacing"]);
     brick.dims = get_vec<int, 3>(config["size"]);
-    brick.bounds = math::box3f(math::vec3f(0), brick.dims * grid_spacing);
+    brick.bounds = math::box3f(math::vec3f(0), brick.dims);
 
     brick.brick = cpp::Volume("structuredRegular");
     brick.brick.setParam("dimensions", brick.dims);
-    brick.brick.setParam("gridSpacing", grid_spacing);
 
     size_t voxel_size = 0;
     const std::string voxel_type_string = config["type"].get<std::string>();
@@ -201,10 +199,8 @@ std::vector<cpp::Geometry> extract_isosurfaces(const json &config,
         throw std::runtime_error("Unrecognized voxel type " + voxel_type_string);
     }
 
-    const math::vec3f grid_spacing = get_vec<float, 3>(config["spacing"]);
     vtkSmartPointer<vtkImageData> img_data = vtkSmartPointer<vtkImageData>::New();
     img_data->SetDimensions(brick.dims.x, brick.dims.y, brick.dims.z);
-    img_data->SetSpacing(grid_spacing.x, grid_spacing.y, grid_spacing.z);
     img_data->SetOrigin(brick.bounds.lower.x, brick.bounds.lower.y, brick.bounds.lower.z);
     img_data->GetPointData()->SetScalars(data_array);
 
@@ -217,6 +213,7 @@ std::vector<cpp::Geometry> extract_isosurfaces(const json &config,
         fedges->Update();
         vtkPolyData *isosurf = fedges->GetOutput();
 
+        size_t total_tris = 0;
         std::vector<math::vec3f> vertices;
         std::vector<math::vec3ui> indices;
         vertices.reserve(isosurf->GetNumberOfCells());
@@ -226,6 +223,21 @@ std::vector<cpp::Geometry> extract_isosurfaces(const json &config,
             if (tri->ComputeArea() == 0.0) {
                 continue;
             }
+            ++total_tris;
+
+            // Embree limits vertex buffer size to 16GB, so check if we need to split the mesh
+            if ((vertices.size() + 1) * sizeof(math::vec3f) >= 16 * 1e9) {
+                std::cout << "Surface is large, splitting. First submesh has "
+                          << indices.size() << " triangles\n";
+                cpp::Geometry isosurface("mesh");
+                isosurface.setParam("vertex.position", cpp::CopiedData(vertices));
+                isosurface.setParam("index", cpp::CopiedData(indices));
+                isosurface.commit();
+                isosurfaces.push_back(isosurface);
+                vertices.clear();
+                indices.clear();
+            }
+
             math::vec3ui tids;
             for (size_t v = 0; v < 3; ++v) {
                 const double *pt = isosurf->GetPoint(tri->GetPointId(v));
@@ -236,7 +248,8 @@ std::vector<cpp::Geometry> extract_isosurfaces(const json &config,
             indices.push_back(tids);
         }
         if (!indices.empty()) {
-            std::cout << "Isosurface has " << indices.size() << " triangles\n";
+            std::cout << "Final submesh has " << indices.size() << " triangles\n"
+                      << "Total surface size: " << total_tris << " triangles\n";
             cpp::Geometry isosurface("mesh");
             isosurface.setParam("vertex.position", cpp::CopiedData(vertices));
             isosurface.setParam("index", cpp::CopiedData(indices));
