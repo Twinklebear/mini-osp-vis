@@ -447,8 +447,6 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     if (!isovalues.empty()) {
         cpp::Material material(renderer_type, "obj");
         material.setParam("kd", math::vec3f(1.f));
-        material.setParam("ks", math::vec3f(0.8f));
-        material.setParam("ns", 50.f);
         material.setParam("d", isosurface_opacity);
         material.commit();
 
