@@ -389,9 +389,8 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     const math::box3f world_bounds = brick.bounds;
     const float world_diagonal = math::length(brick.bounds.size());
     if (!cmdline_camera) {
-        cam_eye = glm::vec3(0.5, 0.5, -1.0);
-        // glm::vec3(world_center.x, world_center.y, world_center.z - world_diagonal * 1.5);
-        cam_at = glm::vec3(0.5, 0.5, 0.5);
+        cam_eye = glm::vec3(0, 0, 1.0);
+        cam_at = glm::vec3(0, 0, 0);
         cam_up = glm::vec3(0.f, 1.f, 0.f);
     }
     ArcballCamera arcball(cam_eye, cam_at, cam_up);
