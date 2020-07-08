@@ -410,7 +410,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     const math::box3f world_bounds = brick.bounds;
     const float world_diagonal = math::length(brick.bounds.size());
     if (!cmdline_camera) {
-        cam_eye = glm::vec3(0, 0, 1.0);
+        cam_eye = glm::vec3(0, 0, -2.59);
         cam_at = glm::vec3(0, 0, 0);
         cam_up = glm::vec3(0.f, 1.f, 0.f);
     }
@@ -448,8 +448,6 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     if (!isovalues.empty()) {
         cpp::Material material(renderer_type, "obj");
         material.setParam("kd", math::vec3f(1.f));
-        material.setParam("ks", math::vec3f(0.8f));
-        material.setParam("ns", 50.f);
         material.setParam("d", isosurface_opacity);
         material.commit();
 
