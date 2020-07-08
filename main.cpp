@@ -178,6 +178,34 @@ int main(int argc, const char **argv)
         return 1;
     }
 
+    OSPError init_err = ospInit(&argc, argv);
+    if (init_err != OSP_NO_ERROR) {
+        throw std::runtime_error("Failed to initialize OSPRay");
+    }
+
+    OSPDevice device = ospGetCurrentDevice();
+    if (!device) {
+        throw std::runtime_error("OSPRay device could not be fetched!");
+    }
+    ospDeviceSetErrorCallback(
+        device,
+        [](void *, OSPError, const char *errorDetails) {
+            std::cerr << "OSPRay error: " << errorDetails << std::endl;
+            throw std::runtime_error(errorDetails);
+        },
+        nullptr);
+    ospDeviceSetStatusCallback(
+        device, [](void *, const char *msg) { std::cout << msg; }, nullptr);
+
+    bool warnAsErrors = true;
+    auto logLevel = OSP_LOG_WARNING;
+
+    ospDeviceSetParam(device, "warnAsError", OSP_BOOL, &warnAsErrors);
+    ospDeviceSetParam(device, "logLevel", OSP_INT, &logLevel);
+
+    ospDeviceCommit(device);
+    ospDeviceRelease(device);
+
     if (SDL_Init(SDL_INIT_EVERYTHING) != 0) {
         std::cerr << "Failed to init SDL: " << SDL_GetError() << "\n";
         return -1;
@@ -210,13 +238,6 @@ int main(int argc, const char **argv)
         std::cerr << "Failed to initialize OpenGL\n";
         return 1;
     }
-
-    ospInit(&argc, argv);
-    // set an error callback to catch any OSPRay errors and exit the application
-    ospDeviceSetErrorFunc(ospGetCurrentDevice(), [](OSPError error, const char *msg) {
-        std::cerr << "[OSPRay error]: " << msg << std::endl << std::flush;
-        throw std::runtime_error(msg);
-    });
 
     // Setup Dear ImGui context
     ImGui::CreateContext();
