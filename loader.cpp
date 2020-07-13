@@ -208,6 +208,14 @@ std::vector<cpp::Geometry> extract_isosurfaces(const json &config,
     img_data->SetOrigin(brick.bounds.lower.x, brick.bounds.lower.y, brick.bounds.lower.z);
     img_data->GetPointData()->SetScalars(data_array);
 
+    using namespace std::chrono;
+
+    // This is a funny way of loading it, but I want to time the creation time for the meshes
+    // without overlapping with the extraction of their vertices
+    size_t max_mesh_size = 1024;
+    std::vector<std::vector<math::vec3f>> all_vertices;
+    std::vector<std::vector<math::vec3ui>> all_indices;
+    auto start = steady_clock::now();
     for (const auto &v : isovalues) {
         vtkSmartPointer<vtkFlyingEdges3D> fedges = vtkSmartPointer<vtkFlyingEdges3D>::New();
         fedges->SetInputData(img_data);
@@ -219,12 +227,16 @@ std::vector<cpp::Geometry> extract_isosurfaces(const json &config,
 
         std::vector<math::vec3f> vertices;
         std::vector<math::vec3ui> indices;
-        vertices.reserve(isosurf->GetNumberOfCells());
-        indices.reserve(isosurf->GetNumberOfCells());
         for (size_t i = 0; i < isosurf->GetNumberOfCells(); ++i) {
             vtkTriangle *tri = dynamic_cast<vtkTriangle *>(isosurf->GetCell(i));
             if (tri->ComputeArea() == 0.0) {
                 continue;
+            }
+            if (indices.size() >= max_mesh_size) {
+                all_vertices.push_back(vertices);
+                all_indices.push_back(indices);
+                vertices.clear();
+                indices.clear();
             }
             math::vec3ui tids;
             for (size_t v = 0; v < 3; ++v) {
@@ -236,16 +248,26 @@ std::vector<cpp::Geometry> extract_isosurfaces(const json &config,
             indices.push_back(tids);
         }
         if (!indices.empty()) {
-            std::cout << "Isosurface has " << indices.size() << " triangles\n";
-            cpp::Geometry isosurface("mesh");
-            isosurface.setParam("vertex.position", cpp::CopiedData(vertices));
-            isosurface.setParam("index", cpp::CopiedData(indices));
-            isosurface.commit();
-            isosurfaces.push_back(isosurface);
-        } else {
-            std::cout << "Isosurface at " << v << " is empty\n";
+            all_vertices.push_back(vertices);
+            all_indices.push_back(indices);
         }
     }
+    auto end = steady_clock::now();
+    size_t duration = duration_cast<milliseconds>(end - start).count();
+    std::cout << "Building vertex lists took " << duration << "ms\n";
+
+    // Now go through and make all the meshes
+    start = steady_clock::now();
+    for (size_t i = 0; i < all_vertices.size(); ++i) {
+        cpp::Geometry isosurface("mesh");
+        isosurface.setParam("vertex.position", cpp::CopiedData(all_vertices[i]));
+        isosurface.setParam("index", cpp::CopiedData(all_indices[i]));
+        isosurface.commit();
+        isosurfaces.push_back(isosurface);
+    }
+    end = steady_clock::now();
+    duration = duration_cast<milliseconds>(end - start).count();
+    std::cout << "Creating geometry took " << duration << "ms\n";
 #else
     cpp::Geometry isosurface("isosurface");
     isosurface.setParam("isovalue", cpp::CopiedData(isovalues));
