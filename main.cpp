@@ -4,21 +4,14 @@
 #include <iostream>
 #include <limits>
 #include <thread>
-#include <SDL.h>
 #include <ospray/ospray.h>
 #include <ospray/ospray_cpp.h>
 #include "arcball_camera.h"
-#include "glad/glad.h"
-#include "imgui/imgui.h"
-#include "imgui_impl_opengl3.h"
-#include "imgui_impl_sdl.h"
 #include "loader.h"
 #include "stb_image.h"
 #include "stb_image_write.h"
 #include "util/arcball_camera.h"
 #include "util/json.hpp"
-#include "util/shader.h"
-#include "util/transfer_function_widget.h"
 #include "util/util.h"
 
 using namespace ospray;
@@ -167,7 +160,7 @@ glm::vec2 transform_mouse(glm::vec2 in)
     return glm::vec2(in.x * 2.f / win_width - 1.f, 1.f - 2.f * in.y / win_height);
 }
 
-void run_app(const std::vector<std::string> &args, SDL_Window *window);
+void run_app(const std::vector<std::string> &args);
 
 int main(int argc, const char **argv)
 {
@@ -206,65 +199,14 @@ int main(int argc, const char **argv)
     ospDeviceCommit(device);
     ospDeviceRelease(device);
 
-    if (SDL_Init(SDL_INIT_EVERYTHING) != 0) {
-        std::cerr << "Failed to init SDL: " << SDL_GetError() << "\n";
-        return -1;
-    }
-
-    const char *glsl_version = "#version 330 core";
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
-
-    // Create window with graphics context
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-    SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
-
-    SDL_Window *window = SDL_CreateWindow("OSPRay Mini-Scivis",
-                                          SDL_WINDOWPOS_CENTERED,
-                                          SDL_WINDOWPOS_CENTERED,
-                                          win_width,
-                                          win_height,
-                                          SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
-
-    SDL_GLContext gl_context = SDL_GL_CreateContext(window);
-    SDL_GL_SetSwapInterval(1);
-    SDL_GL_MakeCurrent(window, gl_context);
-
-    if (!gladLoadGL()) {
-        std::cerr << "Failed to initialize OpenGL\n";
-        return 1;
-    }
-
-    // Setup Dear ImGui context
-    ImGui::CreateContext();
-
-    // Setup Dear ImGui style
-    ImGui::StyleColorsDark();
-
-    // Setup Platform/Renderer bindings
-    ImGui_ImplSDL2_InitForOpenGL(window, gl_context);
-    ImGui_ImplOpenGL3_Init(glsl_version);
-
-    run_app(std::vector<std::string>(argv, argv + argc), window);
-
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplSDL2_Shutdown();
-    ImGui::DestroyContext();
+    run_app(std::vector<std::string>(argv, argv + argc));
 
     ospShutdown();
-
-    SDL_GL_DeleteContext(gl_context);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
 
     return 0;
 }
 
-void run_app(const std::vector<std::string> &args, SDL_Window *window)
+void run_app(const std::vector<std::string> &args)
 {
     json config;
     std::string idx_file;
@@ -279,7 +221,6 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     math::vec3f background_color(1.f);
     std::vector<math::vec4f> isosurface_colors;
     float isosurface_opacity = 1.f;
-    std::vector<Colormap> cmdline_colormaps;
     std::array<LightParams, 3> light_params = {
         LightParams(0.3f),
         LightParams(1.f, math::vec3f(0.5f, -1.f, 0.25f)),
@@ -309,19 +250,6 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
             cam_up.x = std::stof(args[++i]);
             cam_up.y = std::stof(args[++i]);
             cam_up.z = std::stof(args[++i]);
-        } else if (args[i] == "-tfn") {
-            bool use_opacity = true;
-            if (args[i + 1] == "ignore_opacity") {
-                use_opacity = false;
-                ++i;
-            }
-            const std::string tfn_file = args[++i];
-            const std::string tfn_name = get_file_basename(tfn_file);
-            int x, y, n;
-            uint8_t *data = stbi_load(tfn_file.c_str(), &x, &y, &n, 4);
-            std::vector<uint8_t> img_data(data, data + x * 4);
-            stbi_image_free(data);
-            cmdline_colormaps.emplace_back(tfn_name, img_data, LINEAR, use_opacity);
         } else if (args[i] == "-bg") {
             background_color.x = std::stof(args[++i]);
             background_color.y = std::stof(args[++i]);
@@ -415,35 +343,13 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     }
     ArcballCamera arcball(cam_eye, cam_at, cam_up);
 
-    TransferFunctionWidget tfn_widget;
-    for (const auto &cmap : cmdline_colormaps) {
-        tfn_widget.add_colormap(cmap);
-    }
-    std::vector<float> tfn_colors;
-    std::vector<float> tfn_opacities;
-    tfn_widget.get_colormapf(tfn_colors, tfn_opacities);
-
-    cpp::TransferFunction tfn("piecewiseLinear");
-    tfn.setParam("color",
-                 cpp::SharedData(reinterpret_cast<math::vec3f *>(tfn_colors.data()),
-                                 tfn_colors.size() / 3));
-    tfn.setParam("opacity", cpp::SharedData(tfn_opacities.data(), tfn_opacities.size()));
-    tfn.setParam("valueRange", ui_value_range);
-    tfn.commit();
-
     cpp::Renderer renderer(renderer_type);
     float sampling_rate = 1.f;
     renderer.setParam("volumeSamplingRate", sampling_rate);
     renderer.setParam("backgroundColor", background_color);
     renderer.commit();
 
-    brick.model.setParam("densityScale", density_scale);
-    brick.model.setParam("transferFunction", tfn);
-    brick.model.commit();
-
     cpp::Group group;
-    group.setParam("volume", cpp::CopiedData(brick.model));
-
     if (!isovalues.empty()) {
         cpp::Material material(renderer_type, "obj");
         material.setParam("kd", math::vec3f(1.f));
@@ -525,319 +431,16 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     cpp::FrameBuffer fb(win_width, win_height, OSP_FB_SRGBA, OSP_FB_COLOR | OSP_FB_ACCUM);
     fb.clear();
 
-    Shader display_render(fullscreen_quad_vs, display_texture_fs);
-    display_render.uniform("img", 0);
-
-    GLuint render_texture;
-    glGenTextures(1, &render_texture);
-    glBindTexture(GL_TEXTURE_2D, render_texture);
-    glTexImage2D(GL_TEXTURE_2D,
-                 0,
-                 GL_RGBA8,
-                 win_width,
-                 win_height,
-                 0,
-                 GL_RGBA,
-                 GL_UNSIGNED_BYTE,
-                 nullptr);
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-    GLuint vao;
-    glGenVertexArrays(1, &vao);
-    glBindVertexArray(vao);
-
-    glClearColor(0.0, 0.0, 0.0, 0.0);
-    glDisable(GL_DEPTH_TEST);
-
     // Start rendering asynchronously
     cpp::Future future = fb.renderFrame(renderer, camera, world);
     std::vector<OSPObject> pending_commits;
 
-    int frame_id = 0;
-    ImGuiIO &io = ImGui::GetIO();
-    glm::vec2 prev_mouse(-2.f);
-    bool done = false;
-    bool camera_changed = true;
-    bool window_changed = false;
-    bool take_screenshot = false;
-    bool lights_changed = false;
-    bool clipping_changed = false;
-    while (!done) {
-        SDL_Event event;
-        while (SDL_PollEvent(&event)) {
-            ImGui_ImplSDL2_ProcessEvent(&event);
-            if (event.type == SDL_QUIT) {
-                done = true;
-            }
-            if (!io.WantCaptureKeyboard && event.type == SDL_KEYDOWN) {
-                if (event.key.keysym.sym == SDLK_ESCAPE) {
-                    done = true;
-                } else if (event.key.keysym.sym == SDLK_p) {
-                    auto eye = arcball.eye();
-                    auto dir = arcball.dir();
-                    auto up = arcball.up();
-                    std::cout << "-camera " << eye.x << " " << eye.y << " " << eye.z << " "
-                              << eye.x + dir.x << " " << eye.y + dir.y << " " << eye.z + dir.z
-                              << " " << up.x << " " << up.y << " " << up.z << "\n";
-                } else if (event.key.keysym.sym == SDLK_c) {
-                    take_screenshot = true;
-                } else if (event.key.keysym.sym == SDLK_l) {
-                    std::cout << "-ambient " << light_params[0].intensity << " -dir1 "
-                              << light_params[1].intensity << " "
-                              << light_params[1].direction.x << " "
-                              << light_params[1].direction.y << " "
-                              << light_params[1].direction.z << " -dir2 "
-                              << light_params[2].intensity << " "
-                              << light_params[2].direction.x << " "
-                              << light_params[2].direction.y << " "
-                              << light_params[2].direction.z << "\n";
-                }
-            }
-            if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE &&
-                event.window.windowID == SDL_GetWindowID(window)) {
-                done = true;
-            }
-            if (!io.WantCaptureMouse) {
-                if (event.type == SDL_MOUSEMOTION) {
-                    const glm::vec2 cur_mouse =
-                        transform_mouse(glm::vec2(event.motion.x, event.motion.y));
-                    if (prev_mouse != glm::vec2(-2.f)) {
-                        if (event.motion.state & SDL_BUTTON_LMASK) {
-                            arcball.rotate(prev_mouse, cur_mouse);
-                            camera_changed = true;
-                        } else if (event.motion.state & SDL_BUTTON_RMASK) {
-                            arcball.pan(cur_mouse - prev_mouse);
-                            camera_changed = true;
-                        }
-                    }
-                    prev_mouse = cur_mouse;
-                } else if (event.type == SDL_MOUSEWHEEL) {
-                    arcball.zoom(event.wheel.y * world_diagonal / 100.f);
-                    camera_changed = true;
-                }
-            }
-            if (event.type == SDL_WINDOWEVENT &&
-                event.window.event == SDL_WINDOWEVENT_RESIZED) {
-                window_changed = true;
-                win_width = event.window.data1;
-                win_height = event.window.data2;
-                io.DisplaySize.x = win_width;
-                io.DisplaySize.y = win_height;
-
-                camera.setParam("aspect", static_cast<float>(win_width) / win_height);
-                pending_commits.push_back(camera.handle());
-
-                // make new framebuffer
-                fb = cpp::FrameBuffer(
-                    win_width, win_height, OSP_FB_SRGBA, OSP_FB_COLOR | OSP_FB_ACCUM);
-                fb.clear();
-
-                glDeleteTextures(1, &render_texture);
-                glGenTextures(1, &render_texture);
-                // Setup the render textures for color and normals
-                glBindTexture(GL_TEXTURE_2D, render_texture);
-                glTexImage2D(GL_TEXTURE_2D,
-                             0,
-                             GL_RGBA8,
-                             win_width,
-                             win_height,
-                             0,
-                             GL_RGBA,
-                             GL_UNSIGNED_BYTE,
-                             nullptr);
-
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-            }
-        }
-
-        if (camera_changed) {
-            cam_eye = arcball.eye();
-            cam_dir = arcball.dir();
-            cam_up = arcball.up();
-
-            camera.setParam("position", math::vec3f(cam_eye.x, cam_eye.y, cam_eye.z));
-            camera.setParam("direction", math::vec3f(cam_dir.x, cam_dir.y, cam_dir.z));
-            camera.setParam("up", math::vec3f(cam_up.x, cam_up.y, cam_up.z));
-            pending_commits.push_back(camera.handle());
-        }
-
-        ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplSDL2_NewFrame(window);
-        ImGui::NewFrame();
-
-        if (ImGui::Begin("Params")) {
-            if (ImGui::SliderFloat("Density Scale", &density_scale, 0.0f, 10.f)) {
-                brick.model.setParam("densityScale", density_scale);
-                pending_commits.push_back(brick.model.handle());
-            }
-            if (ImGui::SliderFloat("Sampling Rate", &sampling_rate, 0.1f, 5.f)) {
-                renderer.setParam("volumeSamplingRate", sampling_rate);
-                pending_commits.push_back(renderer.handle());
-            }
-            if (ImGui::SliderFloat2(
-                    "Value Range", &ui_value_range.x, value_range.x, value_range.y)) {
-                tfn.setParam("valueRange", ui_value_range);
-                pending_commits.push_back(tfn.handle());
-                pending_commits.push_back(brick.model.handle());
-            }
-
-            for (size_t i = 0; i < lights.size(); ++i) {
-                ImGui::PushID(i);
-                ImGui::Separator();
-
-                if (i == 0) {
-                    ImGui::Text("Ambient Light");
-                } else {
-                    ImGui::Text("Directional Light");
-                }
-
-                if (ImGui::SliderFloat("Intensity", &light_params[i].intensity, 0.f, 10.f)) {
-                    lights[i].setParam("intensity", light_params[i].intensity);
-                    pending_commits.push_back(lights[i].handle());
-                    lights_changed = true;
-                }
-                if (i != 0) {
-                    if (ImGui::SliderFloat3(
-                            "Direction", &light_params[i].direction.x, -1.f, 1.f)) {
-                        lights[i].setParam("direction", light_params[i].direction);
-                        pending_commits.push_back(lights[i].handle());
-                        lights_changed = true;
-                    }
-                }
-                ImGui::PopID();
-            }
-            if (lights_changed) {
-                world.setParam("light", cpp::CopiedData(lights));
-                pending_commits.push_back(world.handle());
-            }
-
-            for (size_t i = 0; i < clipping_planes.size(); ++i) {
-                ImGui::PushID(i);
-                ImGui::Separator();
-                auto &plane = clipping_planes[i];
-
-                ImGui::Text("Clipping Plane on axis %d", plane.axis);
-                clipping_changed |= ImGui::Checkbox("Enabled", &plane.enabled);
-                if (ImGui::Checkbox("Flip", &plane.flip_plane)) {
-                    plane.flip_direction(plane.flip_plane, pending_commits);
-                    clipping_changed = true;
-                }
-                if (ImGui::SliderFloat("Position",
-                                       &plane.position[plane.axis],
-                                       world_bounds.lower[plane.axis],
-                                       world_bounds.upper[plane.axis])) {
-                    plane.set_position(plane.position[plane.axis], pending_commits);
-                    clipping_changed = true;
-                }
-
-                ImGui::PopID();
-            }
-        }
-        ImGui::End();
-
-        if (ImGui::Begin("Transfer Function")) {
-            if (ImGui::Button("Save Transfer Function")) {
-                auto tfn_img = tfn_widget.get_colormap();
-                stbi_write_png("transfer_function.png",
-                               tfn_img.size() / 4,
-                               1,
-                               4,
-                               tfn_img.data(),
-                               tfn_img.size());
-                std::cout << "Transfer function saved to 'transfer_function.png'\n";
-            }
-            tfn_widget.draw_ui();
-        }
-        ImGui::End();
-
-        // Rendering
-        ImGui::Render();
-        glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
-
-        if (render_frame_count != -1 && frame_id == render_frame_count) {
-            take_screenshot = true;
-            done = true;
-        }
-
-        if (future.isReady()) {
-            ++frame_id;
-            if (!window_changed) {
-                uint32_t *img = (uint32_t *)fb.map(OSP_FB_COLOR);
-                glTexSubImage2D(GL_TEXTURE_2D,
-                                0,
-                                0,
-                                0,
-                                win_width,
-                                win_height,
-                                GL_RGBA,
-                                GL_UNSIGNED_BYTE,
-                                img);
-                if (take_screenshot) {
-                    take_screenshot = false;
-                    stbi_flip_vertically_on_write(1);
-                    stbi_write_jpg(
-                        output_image_file.c_str(), win_width, win_height, 4, img, 90);
-                    std::cout << "Screenshot saved to '" << output_image_file << "'"
-                              << std::endl;
-                    stbi_flip_vertically_on_write(0);
-                }
-                fb.unmap(img);
-            }
-            window_changed = false;
-
-            if (tfn_widget.changed()) {
-                tfn_widget.get_colormapf(tfn_colors, tfn_opacities);
-                tfn.setParam(
-                    "color",
-                    cpp::SharedData(reinterpret_cast<math::vec3f *>(tfn_colors.data()),
-                                    tfn_colors.size() / 3));
-                tfn.setParam("opacity",
-                             cpp::SharedData(tfn_opacities.data(), tfn_opacities.size()));
-                tfn.setParam("valueRange", ui_value_range);
-                pending_commits.push_back(tfn.handle());
-                pending_commits.push_back(brick.model.handle());
-            }
-
-            if (clipping_changed) {
-                std::vector<cpp::Instance> active_instances = {instance};
-                for (auto &p : clipping_planes) {
-                    if (p.enabled) {
-                        active_instances.push_back(p.instance);
-                    }
-                }
-                world.setParam("instance", cpp::CopiedData(active_instances));
-                pending_commits.push_back(world.handle());
-            }
-            clipping_changed = false;
-
-            if (!pending_commits.empty()) {
-                fb.clear();
-            }
-            for (auto &c : pending_commits) {
-                ospCommit(c);
-            }
-            pending_commits.clear();
-
-            future = fb.renderFrame(renderer, camera, world);
-        }
-
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glUseProgram(display_render.program);
-        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-        SDL_GL_SwapWindow(window);
-
-        camera_changed = false;
-        lights_changed = false;
-    }
+    future.wait();
+    uint32_t *img = (uint32_t*)fb.map(OSP_FB_COLOR);
+    stbi_flip_vertically_on_write(1);
+    stbi_write_jpg(output_image_file.c_str(), win_width, win_height, 4, img, 90);
+    std::cout << "Screenshot saved to '" << output_image_file << "'" << std::endl;
+    stbi_flip_vertically_on_write(0);
+    fb.unmap(img);
 }
 

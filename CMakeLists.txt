@@ -7,8 +7,6 @@ endif()
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
-find_package(SDL2 REQUIRED)
-find_package(OpenGL REQUIRED)
 find_package(ospray 2.0 REQUIRED)
 find_package(rkcommon REQUIRED)
 find_package(TBB REQUIRED)
@@ -20,35 +18,24 @@ if (USE_EXPLICIT_ISOSURFACE)
     find_package(VTK)
 endif()
 
-add_subdirectory(imgui)
 add_subdirectory(util)
 
 add_executable(mini_scivis
     main.cpp
-    loader.cpp
-    imgui_impl_opengl3.cpp
-    imgui_impl_sdl.cpp)
+    loader.cpp)
 
 set_target_properties(mini_scivis PROPERTIES
     CXX_STANDARD 14
     CXX_STANDARD_REQUIRED ON)
 
-target_include_directories(mini_scivis PUBLIC
-	$<BUILD_INTERFACE:${SDL2_INCLUDE_DIR}>
-	$<BUILD_INTERFACE:${OPENGL_INCLUDE_DIR}>)
-
 target_link_libraries(mini_scivis PUBLIC
     ospray::ospray
     rkcommon::rkcommon
     TBB::tbb
-    util
-    imgui
-    ${SDL2_LIBRARY}
-    ${OPENGL_LIBRARY})
+    util)
 
 target_compile_definitions(mini_scivis PUBLIC
     -DNOMINMAX
-    -DSDL_MAIN_HANDLED
     -DOSPRAY_CPP_RKCOMMON_TYPES)
 
 if ("${VTK_FOUND}" AND USE_EXPLICIT_ISOSURFACE)
