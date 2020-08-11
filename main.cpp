@@ -7,6 +7,7 @@
 #include <SDL.h>
 #include <ospray/ospray.h>
 #include <ospray/ospray_cpp.h>
+#include <ospray/ospray_cpp/ext/rkcommon.h>
 #include "arcball_camera.h"
 #include "glad/glad.h"
 #include "imgui/imgui.h"

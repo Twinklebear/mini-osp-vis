@@ -7,6 +7,9 @@
 #include <vector>
 #include <ospray/ospray.h>
 #include <ospray/ospray_cpp.h>
+#include <ospray/ospray_cpp/ext/rkcommon.h>
+#include <rkcommon/math/box.h>
+#include <rkcommon/math/vec.h>
 #include "json.hpp"
 #include <glm/glm.hpp>
 
