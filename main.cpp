@@ -286,6 +286,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
         LightParams(1.f, math::vec3f(0.5f, -1.f, 0.25f)),
         LightParams(1.f, math::vec3f(-0.5f, -0.5f, 0.5f))};
 
+    std::string volume_file;
     int render_frame_count = -1;
     std::string output_image_file = "mini_scivis.jpg";
     float density_scale = 1.f;
@@ -356,53 +357,67 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
         } else if (args[i] == "-h") {
             std::cout << USAGE << "\n";
             return;
-        } else {
-            if (get_file_extension(args[i]) == "json") {
-                std::ifstream cfg_file(args[i].c_str());
-                cfg_file >> config;
+        } else if (args[i][0] != '-') {
+            volume_file = args[i];
+        }
+    }
+    if (volume_file.empty()) {
+        std::cout << "No volume file provided!\n";
+        throw std::runtime_error("No volume file provided");
+    }
 
-                std::string base_path = get_file_basepath(args[i]);
-                if (base_path == args[i]) {
-                    base_path = ".";
-                }
-                const std::string base_name = get_file_basename(config["url"]);
-                config["volume"] = base_path + "/" + base_name;
-                brick = load_raw_volume(config);
-            } else {
-#ifdef OPENVISUS_FOUND
-                config = json();
-                brick = load_idx_volume(args[i], config);
-#else
-                std::cerr << "[error]: Requested to load non-JSON file data " << args[i]
-                          << ", but OpenVisus was not found\n";
-                std::exit(1);
-#endif
+    if (get_file_extension(volume_file) == "json") {
+        std::ifstream cfg_file(volume_file.c_str());
+        cfg_file >> config;
+
+        std::string base_path = get_file_basepath(volume_file);
+        if (base_path == volume_file) {
+            base_path = ".";
+        }
+        const std::string base_name = get_file_basename(config["url"]);
+        config["volume"] = base_path + "/" + base_name;
+        brick = load_raw_volume(config);
+
+        if (!std::isfinite(value_range.x) || !std::isfinite(value_range.y)) {
+            std::cout << "Computing value range\n";
+            const std::string voxel_type = config["type"].get<std::string>();
+            if (voxel_type == "uint8") {
+                value_range =
+                    compute_value_range(brick.voxel_data->data(), brick.voxel_data->size());
+            } else if (voxel_type == "uint16") {
+                value_range =
+                    compute_value_range(reinterpret_cast<uint16_t *>(brick.voxel_data->data()),
+                                        brick.voxel_data->size() / sizeof(uint16_t));
+            } else if (voxel_type == "float32") {
+                value_range =
+                    compute_value_range(reinterpret_cast<float *>(brick.voxel_data->data()),
+                                        brick.voxel_data->size() / sizeof(float));
+            } else if (voxel_type == "float64") {
+                value_range =
+                    compute_value_range(reinterpret_cast<double *>(brick.voxel_data->data()),
+                                        brick.voxel_data->size() / sizeof(double));
             }
+            std::cout << "Computed value range: " << value_range << "\n";
         }
+        brick.value_range = value_range;
+        std::cout << config.dump(4) << "\n";
+    } else if (get_file_extension(volume_file) == "off") {
+        brick = load_off(volume_file);
+        value_range = brick.value_range;
+    } else if (get_file_extension(volume_file) == "idx") {
+#ifdef OPENVISUS_FOUND
+        config = json();
+        brick = load_idx_volume(volume_file, config);
+#else
+        std::cerr << "[error]: Requested to load non-JSON file data " << volume_file
+                  << ", but OpenVisus was not found\n";
+        std::exit(1);
+#endif
+    } else {
+        std::cout << "Unsupported file type " << volume_file << "\n";
+        throw std::runtime_error("Unsupported file type " + volume_file);
     }
-    std::cout << config.dump(4) << "\n";
 
-    if (!std::isfinite(value_range.x) || !std::isfinite(value_range.y)) {
-        std::cout << "Computing value range\n";
-        const std::string voxel_type = config["type"].get<std::string>();
-        if (voxel_type == "uint8") {
-            value_range =
-                compute_value_range(brick.voxel_data->data(), brick.voxel_data->size());
-        } else if (voxel_type == "uint16") {
-            value_range =
-                compute_value_range(reinterpret_cast<uint16_t *>(brick.voxel_data->data()),
-                                    brick.voxel_data->size() / sizeof(uint16_t));
-        } else if (voxel_type == "float32") {
-            value_range =
-                compute_value_range(reinterpret_cast<float *>(brick.voxel_data->data()),
-                                    brick.voxel_data->size() / sizeof(float));
-        } else if (voxel_type == "float64") {
-            value_range =
-                compute_value_range(reinterpret_cast<double *>(brick.voxel_data->data()),
-                                    brick.voxel_data->size() / sizeof(double));
-        }
-        std::cout << "Computed value range: " << value_range << "\n";
-    }
     math::vec2f ui_value_range = value_range;
 
     const math::vec3f world_center = brick.bounds.center();
