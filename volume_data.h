@@ -20,4 +20,3 @@ struct VolumeBrick {
 
     math::vec2f value_range;
 };
-

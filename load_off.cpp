@@ -32,7 +32,7 @@ VolumeBrick load_off(const std::string &file_name)
     vertex_positions.reserve(n_verts);
     vertex_scalars.reserve(n_verts);
     volume_data.value_range = math::vec2f(std::numeric_limits<float>::infinity(),
-                                           -std::numeric_limits<float>::infinity());
+                                          -std::numeric_limits<float>::infinity());
     for (size_t i = 0; i < n_verts; ++i) {
         math::vec3f p;
         float value;
@@ -72,4 +72,3 @@ VolumeBrick load_off(const std::string &file_name)
 
     return volume_data;
 }
-

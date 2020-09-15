@@ -11,8 +11,8 @@
 #include <rkcommon/math/box.h>
 #include <rkcommon/math/vec.h>
 #include "json.hpp"
-#include "volume_data.h"
 #include "load_off.h"
+#include "volume_data.h"
 #include <glm/glm.hpp>
 
 using namespace ospray;
