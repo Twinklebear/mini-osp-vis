@@ -53,6 +53,19 @@ VolumeBrick load_off(const std::string &file_name)
     for (size_t i = 0; i < n_tets; ++i) {
         uint64_t a, b, c, d;
         fin >> a >> b >> c >> d;
+        // check and fix tet ordering
+        math::vec3f verts[4];
+        verts[0] = vertex_positions[a];
+        verts[1] = vertex_positions[b];
+        verts[2] = vertex_positions[c];
+        verts[3] = vertex_positions[d];
+        math::vec3f cross_prod = cross(verts[1] - verts[0], verts[2] - verts[0]);
+        math::vec3f norm_v = verts[3] - verts[0];
+        if (dot(cross_prod, norm_v) < 0.f) {
+            uint32_t temp = b;
+            b = c;
+            c = temp;
+        }
         vertex_indices.push_back(a);
         vertex_indices.push_back(b);
         vertex_indices.push_back(c);
