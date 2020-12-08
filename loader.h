@@ -7,20 +7,17 @@
 #include <vector>
 #include <ospray/ospray.h>
 #include <ospray/ospray_cpp.h>
+#include <ospray/ospray_cpp/ext/rkcommon.h>
+#include <rkcommon/math/box.h>
+#include <rkcommon/math/vec.h>
 #include "json.hpp"
+#include "load_off.h"
+#include "volume_data.h"
 #include <glm/glm.hpp>
 
 using namespace ospray;
 using namespace rkcommon;
 using json = nlohmann::json;
-
-struct VolumeBrick {
-    cpp::Volume brick;
-    cpp::VolumetricModel model;
-    math::box3f bounds;
-    math::vec3i dims;
-    std::shared_ptr<std::vector<uint8_t>> voxel_data;
-};
 
 VolumeBrick load_raw_volume(const json &config);
 

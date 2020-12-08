@@ -26,6 +26,7 @@ add_subdirectory(util)
 add_executable(mini_scivis
     main.cpp
     loader.cpp
+    load_off.cpp
     imgui_impl_opengl3.cpp
     imgui_impl_sdl.cpp)
 
