@@ -14,6 +14,8 @@ find_package(rkcommon REQUIRED)
 find_package(TBB REQUIRED)
 find_package(glm REQUIRED)
 find_package(OpenVisus)
+find_package(dw2_common REQUIRED)
+find_package(dw2_client REQUIRED)
 
 option(USE_EXPLICIT_ISOSURFACE "Use explicit isosurface extraction with VTK" OFF)
 if (USE_EXPLICIT_ISOSURFACE)
@@ -44,6 +46,8 @@ target_link_libraries(mini_scivis PUBLIC
     TBB::tbb
     util
     imgui
+    dw2_common::dw2_common
+    dw2_client::dw2_client
     ${SDL2_LIBRARY}
     ${OPENGL_LIBRARY})
 

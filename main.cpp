@@ -9,6 +9,7 @@
 #include <ospray/ospray_cpp.h>
 #include <ospray/ospray_cpp/ext/rkcommon.h>
 #include "arcball_camera.h"
+#include "dw2_client.h"
 #include "glad/glad.h"
 #include "imgui/imgui.h"
 #include "imgui_impl_opengl3.h"
@@ -286,6 +287,11 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
         LightParams(1.f, math::vec3f(0.5f, -1.f, 0.25f)),
         LightParams(1.f, math::vec3f(-0.5f, -0.5f, 0.5f))};
 
+    std::string dw2_host;
+    int dw2_port = -1;
+    // To avoid linking MPI in this app for MPIOffload runs, we pass
+    // the # of worker peers explicitly on the command line
+    int dw2_num_peers = 1;
     std::string volume_file;
     int render_frame_count = -1;
     std::string output_image_file = "mini_scivis.jpg";
@@ -354,6 +360,11 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
             render_frame_count = std::stoi(args[++i]);
         } else if (args[i] == "-o") {
             output_image_file = args[++i];
+        } else if (args[i] == "-dw2") {
+            dw2_host = args[++i];
+            dw2_port = std::stoi(args[++i]);
+        } else if (args[i] == "-dw2-peers") {
+            dw2_num_peers = std::stoi(args[++i]);
         } else if (args[i] == "-h") {
             std::cout << USAGE << "\n";
             return;
@@ -541,6 +552,39 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
     cpp::FrameBuffer fb(win_width, win_height, OSP_FB_SRGBA, OSP_FB_COLOR | OSP_FB_ACCUM);
     fb.clear();
 
+    const bool render_to_wall = !dw2_host.empty();
+    // We need a different aspect ratio for the display wall
+    cpp::Camera dw_camera;
+    cpp::FrameBuffer dw_fb;
+    if (render_to_wall) {
+        ospLoadModule("wall");
+        dw2_info_t info;
+        if (dw2_query_info(&info, dw2_host.c_str(), dw2_port) != DW2_OK) {
+            std::cerr << "Failed to connect to display wall\n";
+            throw std::runtime_error("Failed to connect to display wall");
+        }
+        const math::vec2i wall_size(info.totalPixelsInWall[0], info.totalPixelsInWall[1]);
+        std::cout << "Wall dimensions: " << wall_size << "\n";
+        dw_fb = cpp::FrameBuffer(
+            wall_size.x, wall_size.y, OSP_FB_NONE, OSP_FB_COLOR | OSP_FB_ACCUM);
+        cpp::ImageOperation wall_op("display_wall");
+        wall_op.setParam("host", dw2_host);
+        wall_op.setParam("port", dw2_port);
+        wall_op.setParam("numPeers", dw2_num_peers);
+        wall_op.commit();
+        dw_fb.setParam("imageOperation", cpp::CopiedData(wall_op));
+        dw_fb.commit();
+        dw_fb.clear();
+
+        dw_camera = cpp::Camera("perspective");
+        dw_camera.setParam("aspect", static_cast<float>(wall_size.x) / wall_size.y);
+        dw_camera.setParam("position", math::vec3f(cam_eye.x, cam_eye.y, cam_eye.z));
+        dw_camera.setParam("direction", math::vec3f(cam_dir.x, cam_dir.y, cam_dir.z));
+        dw_camera.setParam("up", math::vec3f(cam_up.x, cam_up.y, cam_up.z));
+        dw_camera.setParam("fovy", 40.f);
+        dw_camera.commit();
+    }
+
     Shader display_render(fullscreen_quad_vs, display_texture_fs);
     display_render.uniform("img", 0);
 
@@ -571,6 +615,10 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
 
     // Start rendering asynchronously
     cpp::Future future = fb.renderFrame(renderer, camera, world);
+    cpp::Future dw_future;
+    if (render_to_wall) {
+        dw_future = dw_fb.renderFrame(renderer, dw_camera, world);
+    }
     std::vector<OSPObject> pending_commits;
 
     int frame_id = 0;
@@ -681,7 +729,14 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
             camera.setParam("position", math::vec3f(cam_eye.x, cam_eye.y, cam_eye.z));
             camera.setParam("direction", math::vec3f(cam_dir.x, cam_dir.y, cam_dir.z));
             camera.setParam("up", math::vec3f(cam_up.x, cam_up.y, cam_up.z));
+
             pending_commits.push_back(camera.handle());
+            if (render_to_wall) {
+                dw_camera.setParam("position", math::vec3f(cam_eye.x, cam_eye.y, cam_eye.z));
+                dw_camera.setParam("direction", math::vec3f(cam_dir.x, cam_dir.y, cam_dir.z));
+                dw_camera.setParam("up", math::vec3f(cam_up.x, cam_up.y, cam_up.z));
+                pending_commits.push_back(dw_camera.handle());
+            }
         }
 
         ImGui_ImplOpenGL3_NewFrame();
@@ -782,7 +837,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
             done = true;
         }
 
-        if (future.isReady()) {
+        if (future.isReady() && (!render_to_wall || dw_future.isReady())) {
             ++frame_id;
             if (!window_changed) {
                 uint32_t *img = (uint32_t *)fb.map(OSP_FB_COLOR);
@@ -835,6 +890,9 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
 
             if (!pending_commits.empty()) {
                 fb.clear();
+                if (render_to_wall) {
+                    dw_fb.clear();
+                }
             }
             for (auto &c : pending_commits) {
                 ospCommit(c);
@@ -842,6 +900,9 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
             pending_commits.clear();
 
             future = fb.renderFrame(renderer, camera, world);
+            if (render_to_wall) {
+                dw_future = dw_fb.renderFrame(renderer, dw_camera, world);
+            }
         }
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
