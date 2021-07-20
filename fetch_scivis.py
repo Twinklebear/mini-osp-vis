@@ -15,7 +15,7 @@ group.add_argument('-l', '--list', dest='do_list', action='store_true', help='Li
 group.add_argument('-d', '--dataset', type=str, help='Name of the dataset to fetch')
 args = parser.parse_args()
 
-r = requests.get("https://klacansky.com/open-scivis-datasets/data_sets.json")
+r = requests.get("https://klacansky.com/open-scivis-datasets/datasets.json")
 index = r.json()
 
 if args.do_list:
