@@ -14,7 +14,7 @@ target_link_libraries(util PUBLIC
     rkcommon::rkcommon
     TBB::tbb
     imgui
-    glm::glm
+    glm
     ${SDL2_LIBRARY}
     ${OPENGL_LIBRARY})
 
