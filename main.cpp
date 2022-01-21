@@ -685,7 +685,7 @@ void run_app(const std::vector<std::string> &args, SDL_Window *window)
         }
 
         ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplSDL2_NewFrame(window);
+        ImGui_ImplSDL2_NewFrame();
         ImGui::NewFrame();
 
         if (ImGui::Begin("Params")) {
