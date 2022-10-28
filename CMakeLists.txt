@@ -35,7 +35,7 @@ set_target_properties(mini_scivis PROPERTIES
     CXX_STANDARD_REQUIRED ON)
 
 target_include_directories(mini_scivis PUBLIC
-	$<BUILD_INTERFACE:${SDL2_INCLUDE_DIR}>
+    $<BUILD_INTERFACE:${SDL2_INCLUDE_DIRS}>
 	$<BUILD_INTERFACE:${OPENGL_INCLUDE_DIR}>)
 
 target_link_libraries(mini_scivis PUBLIC
@@ -44,7 +44,7 @@ target_link_libraries(mini_scivis PUBLIC
     TBB::tbb
     util
     imgui
-    ${SDL2_LIBRARY}
+    ${SDL2_LIBRARIES}
     ${OPENGL_LIBRARY})
 
 target_compile_definitions(mini_scivis PUBLIC
