@@ -28,7 +28,7 @@ if args.do_list:
     print(f'({size/1024:.0f} GB)' if size > 1024 else f'({size:.0f} MB)' if size > 1 else '(<1 MB)')
   sys.exit(0)
 
-meta = [x for x in index if x["name"].lower().replace(' ', '_') == args.dataset][0]
+meta = [x for x in index.values() if x["name"].lower().replace(' ', '_') == args.dataset][0]
 print(json.dumps(meta, indent=4))
 
 with open(args.dataset + ".json", "w") as f:
