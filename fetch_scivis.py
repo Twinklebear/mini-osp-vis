@@ -20,7 +20,7 @@ index = r.json()
 
 if args.do_list:
   print('Available datasets:')
-  for x in index:
+  for x in index.values():
     name = x['name'].lower().replace(' ', '_')
     dims = [int(d) for d in x['size']]
     size = dims[0] * dims[1] * dims[2] * sizeof[x['type']] / 1048576
